@@ -15,7 +15,7 @@ to pull in the remaining dependencies:
 ```
 mkdir -p ~/event_ros_tools_ws/src
 cd ~/event_ros_tools_ws
-git clone https://github.com/ZiyunClaudeWang/EventRosTools.git src/event_ros_tools
+git clone https://github.com/ZiyunClaudeWang/event_ros_tools.git src/event_ros_tools
 wstool init src src/event_ros_tools/event_ros_tools.rosinstall
 # to update an existing space:
 # wstool merge -t src src/event_ros_tools/event_ros_tools.rosinstall

@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>event_ros_tools</name>
+  <version>1.0.0</version>
+  <description>package with ROS tools related to event based cameras</description>
+  <maintainer email="bernd.pfrommer@gmail.com">Bernd Pfrommer</maintainer>
+  <license>Apache2</license>
+  <author email="bernd.pfrommer@gmail.com">Bernd Pfrommer</author>
+
+
+  <buildtool_depend>catkin</buildtool_depend>
+ 
+  <depend>dvs_msgs</depend>  
+  <depend>roscpp</depend>
+  <depend>nodelet</depend>
+  <depend>image_transport</depend>
+  <depend>cv_bridge</depend>
+
+  <exec_depend>nodelet_rosbag</exec_depend>
+  <exec_depend>metavision_ros_driver</exec_depend>
+  
+  <export>
+    <nodelet plugin="${prefix}/nodelet_plugins.xml"/>
+  </export>
+
+</package>

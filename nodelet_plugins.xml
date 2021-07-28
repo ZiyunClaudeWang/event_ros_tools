@@ -1,0 +1,9 @@
+<library path="lib/libslicer_nodelet">
+  <class name="event_ros_tools/SlicerNodelet"
+         type="event_ros_tools::SlicerNodelet"
+         base_class_type="nodelet::Nodelet">
+    <description>
+      nodelet for event slicing
+    </description>
+  </class>
+</library>

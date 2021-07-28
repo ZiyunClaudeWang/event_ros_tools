@@ -1,0 +1,12 @@
+<launch>
+  <arg name="slice_time" default="0.025"/>
+  <arg name="event_topic" default="/prophesee/camera/cd_events_buffer"/>
+  <node pkg="event_ros_tools" type="slicer_node" name="slicer" clear_params="true"
+	output="screen">
+    <param name="slice_time" value="$(arg slice_time)"/>
+    <param name="mode" value="ignore_polarities_inv"/>
+    <param name="statistics_print_interval" value="1.0"/>
+    <!-- remap the events topic -->
+    <remap from="~events" to="/metavision_driver/events"/>
+  </node>
+</launch>

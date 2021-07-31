@@ -4,6 +4,8 @@
   <node pkg="event_ros_tools" type="slicer_node" name="slicer" clear_params="true"
 	output="screen">
     <param name="slice_time" value="$(arg slice_time)"/>
+    <!-- what kind of messages to subscribe to (dvs or prophesee) -->
+    <param name="message_type" value="dvs"/>
     <param name="mode" value="ignore_polarities_inv"/>
     <param name="statistics_print_interval" value="1.0"/>
     <!-- remap the events topic -->

@@ -12,6 +12,8 @@
  
   <depend>dvs_msgs</depend>
   <depend>prophesee_event_msgs</depend>  
+  <depend>event_ros_tools_msgs</depend>
+
   <depend>roscpp</depend>
   <depend>nodelet</depend>
   <depend>image_transport</depend>

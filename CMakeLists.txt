@@ -1,9 +1,12 @@
 cmake_minimum_required(VERSION 3.0.2)
 project(event_ros_tools)
 
+add_compile_options(-Wall -Wextra -pedantic -Werror)
+
 find_package(catkin REQUIRED COMPONENTS
   dvs_msgs
   prophesee_event_msgs
+  event_ros_tools_msgs
   roscpp
   nodelet
   image_transport
@@ -31,6 +34,18 @@ target_link_libraries(slicer_nodelet ${OpenCV_LIBS} ${catkin_LIBRARIES})
 # node
 add_executable(slicer_node src/slicer_node.cpp)
 target_link_libraries(slicer_node ${OpenCV_LIBS} ${catkin_LIBRARIES})
+
+#
+# --------- flicker framer ------------
+#
+#add_library(flicker src/flicker.cpp)
+#target_link_libraries(flicker ${OpenCV_LIBS} ${catkin_LIBRARIES})
+# nodelet
+#add_library(flicker_nodelet src/flicker_nodelet.cpp)
+#target_link_libraries(flicker_nodelet ${OpenCV_LIBS} ${catkin_LIBRARIES})
+# node
+add_executable(flicker_node src/flicker_node.cpp)
+target_link_libraries(flicker_node ${OPENCV_LIBS} ${catkin_LIBRARIES})
 
 
 #############

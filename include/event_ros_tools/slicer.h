@@ -157,6 +157,7 @@ private:
 
   void publishImage(const std_msgs::Header & header, const ros::Time & t)
   {
+    (void)t;
 #ifdef DEBUG_IMAGE
     double min, max;
     cv::minMaxLoc(image_, &min, &max);

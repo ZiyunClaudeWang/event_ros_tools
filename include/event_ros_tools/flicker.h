@@ -95,7 +95,7 @@ public:
       eventCount_[i] = 0;
       intCount_[i] = 0;
       rateMean_[i] = 1e3;  // assume 1kev rate to start
-      dt_[i] = 0;
+      dt_ = 0;
       isHigh_[i] = false;
       lead_[i] = ros::Duration(nh_.param<double>("lead_time", 1e-3));
       duration_[i] = ros::Duration(nh_.param<double>("duration", 5e-3));
@@ -138,8 +138,7 @@ private:
       ROS_INFO(
         "rcv msg sz: %4d ev,  rt[Mevs] avg: %7.3f, max: %7.3f, int: %7.3f, "
         "drop: %3d, qs: %2zu, dT: %5.3f",
-        (int)avgSize, avgRate, maxRate_, integ, dropped_, maxQueueSize_,
-        dt_[0]);
+        (int)avgSize, avgRate, maxRate_, integ, dropped_, maxQueueSize_, dt_);
       maxRate_ = 0;
       lastPrintTime_ += statisticsPrintInterval_;
       totalEvents_ = 0;
@@ -258,15 +257,15 @@ private:
         const double alpha = periodEstablished_ ? 0.1 : 0.2;
         // cannot ask for err less than 2 * time bin
         const double minErr = 4 * binInterval_ * binInterval_;
-        const double dtCov = std::max(dtCov_ - dt_[0] * dt_[0], minErr);
-        const double dtErr = dt - dt_[0];
+        const double dtCov = std::max(dtCov_ - dt_ * dt_, minErr);
+        const double dtErr = dt - dt_;
         if (dtErr * dtErr < 1.0 * dtCov || !periodEstablished_) {
-          dt_[0] = dt_[0] * (1.0 - alpha) + dt * alpha;
+          dt_ = dt_ * (1.0 - alpha) + dt * alpha;
           dtCov_ = dtCov_ * (1.0 - alpha) + dt * dt * alpha;
         } else {
           ROS_WARN_STREAM(
             "ignoring dt update " << (i == 0 ? "OFF" : "ON") << " " << dt
-                                  << " vs avg: " << dt_[0]
+                                  << " vs avg: " << dt_
                                   << " stddev: " << std::sqrt(dtCov));
         }
         if (!periodEstablished_) {
@@ -276,20 +275,34 @@ private:
           if (warmupPeriodCount_ == 0) {
             // don't start until the covariance is reasonable
             const double stddev =
-              std::max(std::sqrt(dtCov_ - dt_[0] * dt_[0]), binInterval_);
-            if (stddev < 0.05 * dt_[0]) {
-              ROS_INFO_STREAM("period established as " << dt_[0] << "s");
+              std::max(std::sqrt(dtCov_ - dt_ * dt_), binInterval_);
+            if (stddev < 0.05 * dt_) {
+              ROS_INFO_STREAM("period established as " << dt_ << "s");
               periodEstablished_ = true;
             } else {
               ROS_INFO(
-                "period: %5.3fs, waiting for stddev (%5.3fs) to decrease",
-                dt_[0], stddev);
+                "period: %5.3fs, waiting for stddev (%5.3fs) to decrease", dt_,
+                stddev);
             }
           }
         }
         flipTime_[1][i] = t;  // remember time of up flank
-        isHigh_[i] = true;
-      }
+        isHigh_[i] = true;    // mark as being high
+        // when an ON event spike happens it is safe to advance
+        // the OFF integration window, and vice versa.
+        const int i_oth = (i + 1) % 2;
+        const ros::Duration period(dt_);
+        // time of new start window
+        const auto tws = flipTime_[1][i_oth] + period - lead_[i_oth];
+        timeWindowStart_[i_oth] = tws;
+        timeWindowEnd_[i_oth] = timeWindowStart_[i_oth] + duration_[i_oth];
+#ifdef DEBUG
+        winDebugFile_[i_oth]
+          << (t - startTime_) << " " << (flipTime_[1][i_oth] - startTime_)
+          << " " << (timeWindowStart_[i_oth] - startTime_) << " "
+          << (timeWindowEnd_[i_oth] - startTime_) << std::endl;
+#endif
+      }  // if switched from low to high
       const bool isLowNow = rate < rateMean_[i] - 0.1 * rateStd;
       if (isHigh_[i] && isLowNow) {
         isHigh_[i] = false;  // reset high indicator
@@ -353,6 +366,7 @@ private:
     int y_max = -1;
 #endif
 #endif
+    const int EVENT_TYPE_TO_USE = 1;
     bool imageComplete(false);
     for (const auto & ev : msg.events) {
       const auto t = ev.ts;
@@ -363,13 +377,30 @@ private:
         // next integration window
         updateRate(t);
       }  // while interval loop
-      const auto p = ev.polarity;
+      const int p = (int)ev.polarity;
       eventCount_[p]++;
-      if (p == 0) {
-        if (t > timeWindowStart_[p] || keepIntegrating_) {
-          if (
-            t < timeWindowEnd_[p] ||
-            keepIntegrating_) {  // we are within the window
+      if (p != EVENT_TYPE_TO_USE || !periodEstablished_) {
+        continue;  //
+      }
+      if (keepIntegrating_) {
+        image_->at<int32_t>(ev.y, ev.x) += 1;
+        intCount_[p]++;
+        statisticsIntCount_[p]++;
+#ifdef DEBUG
+        y_min = std::min(y_min, (int)ev.y);
+        y_max = std::max(y_max, (int)ev.y);
+#endif
+        if ((int)ev.y > msg.height - 2 && keepIntegrating_) {
+          keepIntegrating_ = false;
+          currentlyIntegrating_ = false;
+          imageComplete = true;
+        }
+      } else {
+        if (t > timeWindowStart_[p]) {
+          if (t < timeWindowEnd_[p]) {
+            if (!currentlyIntegrating_) {
+              currentlyIntegrating_ = true;
+            }
             image_->at<int32_t>(ev.y, ev.x) += 1;
             intCount_[p]++;
             statisticsIntCount_[p]++;
@@ -377,28 +408,12 @@ private:
             y_min = std::min(y_min, (int)ev.y);
             y_max = std::max(y_max, (int)ev.y);
 #endif
-#ifdef MAKE_FULL_FRAME
-            if ((int)ev.y > msg.height - 2 && keepIntegrating_) {
-              keepIntegrating_ = false;
-              imageComplete = true;
-            }
-#endif
-          } else {
-            // we are beyond the end of the integration window,
-            // move it up by the time period if necessary
-            const ros::Duration period(dt_[p]);
-            // time of new start window
-            const auto tws = flipTime_[1][p] + period - lead_[p];
-            if (t < tws) {  // only roll if flip time has updated
-              // rolling over to next integration window
-              timeWindowStart_[p] = tws;
-              timeWindowEnd_[p] = timeWindowStart_[p] + duration_[p];
-              winDebugFile_[p] << (t - startTime_) << " "
-                               << (timeWindowStart_[p] - t) << " "
-                               << (timeWindowEnd_[p] - t) << std::endl;
+          } else {  // are beyond integration window
+            if (currentlyIntegrating_) {
 #ifdef MAKE_FULL_FRAME
               keepIntegrating_ = true;
 #else
+              currentlyIntegrating_ = false;
               imageComplete = true;
 #endif
             }
@@ -412,6 +427,12 @@ private:
       tearingFile_ << (msgTime - startTime_).toSec() << " " << y_min << " "
                    << y_max << std::endl;
     }
+    intDebugFile_[0]
+      << (msgTime - startTime_).toSec() << " "
+      << (timeWindowStart_[EVENT_TYPE_TO_USE] - startTime_).toSec() << " "
+      << (timeWindowEnd_[EVENT_TYPE_TO_USE] - startTime_).toSec() << " "
+      << (int)currentlyIntegrating_ << " " << (int)keepIntegrating_ << " "
+      << (int)imageComplete << std::endl;
 #endif
 
     return (imageComplete);
@@ -450,13 +471,14 @@ private:
   uint32_t numBinsWhereRateBelowThreshold_{0};
   uint32_t numBinsDelayIntegration_{0};
   uint32_t numBinsIntegrated_{0};
+  bool currentlyIntegrating_{false};  // true while image integration happens
   bool keepIntegrating_{false};  // control integration beyond time slice
   ros::Time lastBinTime_;
   ros::Time startTime_;
   double rateMean_[2];
   double rateCov_[2];
   bool isHigh_[2];
-  double dt_[2];              // mean time between on and off
+  double dt_;                 // mean time between on and off
   double dtCov_{0};           // tracks covariance (sum of squares)
   ros::Time flipTime_[2][2];  // [HIGH->LOW,LOW->HIGH][ON/OFF]
   uint32_t periodsCounted_[2];

@@ -325,8 +325,10 @@ private:
         ROS_INFO(
           "established rate averages OFF: %6.3f(+-%6.3f)Mevs, ON: "
           "%6.3f(+-%6.3f)Mevs",
-          rateMean_[0], std::sqrt(rateCov_[0] - rateMean_[0] * rateMean_[0]),
-          rateMean_[1], std::sqrt(rateCov_[1] - rateMean_[1] * rateMean_[1]));
+          rateMean_[0] * 1e-6,
+          std::sqrt(rateCov_[0] - rateMean_[0] * rateMean_[0]) * 1e-6,
+          rateMean_[1] * 1e-6,
+          std::sqrt(rateCov_[1] - rateMean_[1] * rateMean_[1]) * 1e-6);
         ROS_INFO("now waiting for period to be established");
         // initialize flip time and window start
         for (int i = 0; i < 2; i++) {

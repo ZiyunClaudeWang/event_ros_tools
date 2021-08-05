@@ -38,6 +38,8 @@
 #include <fstream>
 #endif
 
+#define MAKE_FULL_FRAME
+
 namespace event_ros_tools
 {
 template <class MsgType>
@@ -53,6 +55,7 @@ public:
     intDebugFile_[1].open("int_debug_ON.txt");
     winDebugFile_[0].open("win_debug_OFF.txt");
     winDebugFile_[1].open("win_debug_ON.txt");
+    tearingFile_.open("tearing.txt");
 #endif
   }
   ~Flicker() { shutdown(); }
@@ -73,14 +76,12 @@ public:
   bool initialize()
   {
     thread_ = std::make_shared<std::thread>(&Flicker::publishingThread, this);
-    const double initDt = 1.0 / nh_.param<double>("guessed_flicker_rate", 7.0);
     decayRate_ = 1.0 / nh_.param<double>("averaging_time", 0.5);
     binInterval_ = nh_.param<double>("bin_interval", 1e-3);
     warmupBinCount_ = (int)(4.0 / decayRate_ / binInterval_);
     warmupPeriodCount_ = 10;
     binIntervalInv_ = 1.0 / binInterval_;
     binDuration_ = ros::Duration(binInterval_);
-    peakDetectionRatio_ = nh_.param<double>("peak_detection_ratio", 0.1);
     deadTime_ = ros::Duration(nh_.param<double>("initial_dead_time", 5e-3));
     int qs = nh_.param<int>("event_queue_size", 1000);
     sub_ = nh_.subscribe("events", qs, &Flicker::eventCallback, this);
@@ -94,7 +95,6 @@ public:
       eventCount_[i] = 0;
       intCount_[i] = 0;
       rateMean_[i] = 1e3;  // assume 1kev rate to start
-      dt_[i] = initDt;
       dt_[i] = 0;
       isHigh_[i] = false;
       lead_[i] = ros::Duration(nh_.param<double>("lead_time", 1e-3));
@@ -343,6 +343,14 @@ private:
 
   bool updateImage(const MsgType & msg)
   {
+#ifdef DEBUG
+    int y_min = msg.height;
+    int y_max = -1;
+#else
+#ifdef MAKE_FULL_FRAME
+    int y_max = -1;
+#endif
+#endif
     bool imageComplete(false);
     for (const auto & ev : msg.events) {
       const auto t = ev.ts;
@@ -356,13 +364,26 @@ private:
       const auto p = ev.polarity;
       eventCount_[p]++;
       if (p == 0) {
-        if (t > timeWindowStart_[p]) {
-          if (t < timeWindowEnd_[p]) {  // we are within the window
+        if (t > timeWindowStart_[p] || keepIntegrating_) {
+          if (
+            t < timeWindowEnd_[p] ||
+            keepIntegrating_) {  // we are within the window
             image_->at<int32_t>(ev.y, ev.x) += 1;
             intCount_[p]++;
             statisticsIntCount_[p]++;
+#ifdef DEBUG
+            y_min = std::min(y_min, (int)ev.y);
+            y_max = std::max(y_max, (int)ev.y);
+#endif
+#ifdef MAKE_FULL_FRAME
+            if ((int)ev.y > msg.height - 2 && keepIntegrating_) {
+              keepIntegrating_ = false;
+              imageComplete = true;
+            }
+#endif
           } else {
-            // we are outside the window, check if it is
+            // we are beyond the end of the integration window,
+            // move it up by the time period if necessary
             const ros::Duration period(dt_[p]);
             // time of new start window
             const auto tws = flipTime_[1][p] + period - lead_[p];
@@ -373,12 +394,24 @@ private:
               winDebugFile_[p] << (t - startTime_) << " "
                                << (timeWindowStart_[p] - t) << " "
                                << (timeWindowEnd_[p] - t) << std::endl;
+#ifdef MAKE_FULL_FRAME
+              keepIntegrating_ = true;
+#else
               imageComplete = true;
+#endif
             }
           }
         }
       }
     }  // loop over events
+#ifdef DEBUG
+    const auto msgTime = msg.header.stamp;
+    if (y_min < (int)msg.height && y_max > -1) {
+      tearingFile_ << (msgTime - startTime_).toSec() << " " << y_min << " "
+                   << y_max << std::endl;
+    }
+#endif
+
     return (imageComplete);
   }
 
@@ -406,7 +439,6 @@ private:
   double binInterval_{1e-3};         // time slice for rate binning
   ros::Duration binDuration_{1e-3};  // time slice for rate binning
   double binIntervalInv_{1e3};       // inverse of time slice for rate binning
-  double peakDetectionRatio_{0.25};  // how many stddev from avg
   size_t eventCount_[2];             // number of events occured in bin
   size_t intCount_[2];               // number of integrated events
   ros::Duration duration_[2];        // time window of ON and OFF events to use
@@ -416,6 +448,7 @@ private:
   uint32_t numBinsWhereRateBelowThreshold_{0};
   uint32_t numBinsDelayIntegration_{0};
   uint32_t numBinsIntegrated_{0};
+  bool keepIntegrating_{false};  // control integration beyond time slice
   ros::Time lastBinTime_;
   ros::Time startTime_;
   double rateMean_[2];
@@ -440,6 +473,7 @@ private:
   std::ofstream rateDebugFile_;
   std::ofstream intDebugFile_[2];
   std::ofstream winDebugFile_[2];
+  std::ofstream tearingFile_;
 #endif
 };
 }  // namespace event_ros_tools

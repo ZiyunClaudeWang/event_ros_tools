@@ -6,7 +6,6 @@ add_compile_options(-Wall -Wextra -pedantic -Werror)
 find_package(catkin REQUIRED COMPONENTS
   dvs_msgs
   prophesee_event_msgs
-  event_ros_tools_msgs
   roscpp
   nodelet
   image_transport

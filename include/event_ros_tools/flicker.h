@@ -217,10 +217,8 @@ private:
     image_.reset(new cv::Mat(height, width, CV_32SC1, cv::Scalar(0)));
   }
 
-  void updateEstimateOfPeriod(const ros::Time & t)
+  void maintainIntegrationWindow(const ros::Time & t)
   {
-    // the rate and mean are now established, start detecting
-    // up and down slopes
     for (int i = 0; i < 2; i++) {  // loop through ON/OFF
       const double rate = eventCount_[i] * binIntervalInv_;
       const double rdiff = rate - rate_[i];
@@ -239,24 +237,23 @@ private:
           dtSumSq_ = dtSumSq_ * (1.0 - alpha) + dt * dt * alpha;
         } else {
           ROS_WARN_STREAM(
-            "ignoring dt update " << (i == 0 ? "OFF" : "ON") << " " << dt
-                                  << " vs avg: " << dt_
-                                  << " stddev: " << std::sqrt(dtCov));
+            "bad dt update: " << dt << " vs avg: " << dt_
+                              << " stddev: " << std::sqrt(dtCov));
         }
         if (!periodEstablished_) {
           if (warmupPeriodCount_ > 0) {
             warmupPeriodCount_--;
           }
           if (warmupPeriodCount_ == 0) {
-            // don't start until the covariance is reasonable
-            const double stddev =
+            // wait until covariance is reasonable
+            const double sd =
               std::max(std::sqrt(dtSumSq_ - dt_ * dt_), binInterval_);
-            if (stddev < 0.05 * dt_) {
+            if (sd < 0.05 * dt_) {
               ROS_INFO_STREAM("period established as " << dt_ << "s");
               periodEstablished_ = true;
             } else {
               ROS_INFO(
-                "period: %5.3fs, wait for lower noise (%5.3fs)", dt_, stddev);
+                "period: %5.3fs, waiting for lower noise (%5.3fs)", dt_, sd);
             }
           }
         }
@@ -305,8 +302,8 @@ private:
     }
     if (warmupBinCount_ == 0) {
       // the mean and variance of the rate are now established, start detecting
-      // up and down slopes, periods, integration windows
-      updateEstimateOfPeriod(t);
+      // period, up and down slopes, and update integration window
+      maintainIntegrationWindow(t);
     } else {
       warmupBinCount_--;
       if (warmupBinCount_ == 0) {
@@ -329,67 +326,68 @@ private:
     eventCount_[0] = eventCount_[1] = 0;
   }
 
+  inline void integrateIntoImage(int x, int y)
+  {
+    image_->at<int32_t>(y, x) += 1;
+#ifdef DEBUG
+    y_min_ = std::min(y_min_, y);
+    y_max_ = std::max(y_max_, y);
+#endif
+  }
+
   bool updateImage(const MsgType & msg)
   {
 #ifdef DEBUG
-    int y_min = msg.height;
-    int y_max = -1;
+    y_min_ = msg.height;
+    y_max_ = -1;
 #endif
     const int EVENT_TYPE_TO_USE = 0;
     bool imageComplete(false);
     for (const auto & ev : msg.events) {
       const auto t = ev.ts;
       while (t > lastBinTime_ + binDuration_) {
-        // t has crossed into new time bin, process old one
         lastBinTime_ += binDuration_;
-        // update the current period estimate and the
-        // next integration window
+        // t has crossed into new time bin, process old one
+        // update rate estimate and maintain integration window
         updateRate(t);
-      }  // while interval loop
+      }
       const int p = (int)ev.polarity;
       eventCount_[p]++;
       if (p != EVENT_TYPE_TO_USE || !periodEstablished_) {
-        continue;  //
+        continue;
       }
-      if (keepIntegrating_) {
-        image_->at<int32_t>(ev.y, ev.x) += 1;
-#ifdef DEBUG
-        y_min = std::min(y_min, (int)ev.y);
-        y_max = std::max(y_max, (int)ev.y);
-#endif
-        if ((int)ev.y > msg.height - 2 && keepIntegrating_) {
-          keepIntegrating_ = false;
+      if (keepIntegrating_) {  // currently integrating beyond time window
+        integrateIntoImage((int)ev.x, (int)ev.y);
+        if ((int)ev.y > msg.height - 2) {  // event from bottom of image,
+          keepIntegrating_ = false;        // "frame" is complete, stop it.
+          imageComplete = true;            // done with image.
           isIntegrating_ = false;
-          imageComplete = true;
         }
-      } else {
-        if (t > timeWindowStart_[p]) {
-          if (t < timeWindowEnd_[p]) {
-            if (!isIntegrating_) {
-              isIntegrating_ = true;
-            }
-            image_->at<int32_t>(ev.y, ev.x) += 1;
-#ifdef DEBUG
-            y_min = std::min(y_min, (int)ev.y);
-            y_max = std::max(y_max, (int)ev.y);
-#endif
-          } else {  // are beyond integration window
-            if (isIntegrating_) {
-              if (avoidTearing_) {
-                keepIntegrating_ = true;
-              } else {
-                isIntegrating_ = false;
-                imageComplete = true;
-              }
+        continue;
+      }
+      if (t > timeWindowStart_[p]) {
+        if (t < timeWindowEnd_[p]) {  // t is inside integration window
+          if (!isIntegrating_) {
+            isIntegrating_ = true;
+          }
+          integrateIntoImage((int)ev.x, (int)ev.y);
+        } else {  // t is beyond integration window
+          if (isIntegrating_) {
+            if (avoidTearing_) {
+              keepIntegrating_ = true;
+            } else {
+              isIntegrating_ = false;
+              imageComplete = true;
             }
           }
         }
       }
+
     }  // loop over events
 #ifdef DEBUG
     const auto msgTime = msg.header.stamp;
-    if (y_min < (int)msg.height && y_max > -1) {
-      tearingFile_ << (msgTime - startTime_) << " " << y_min << " " << y_max
+    if (y_min_ < (int)msg.height && y_max_ > -1) {
+      tearingFile_ << (msgTime - startTime_) << " " << y_min_ << " " << y_max_
                    << std::endl;
     }
     intDebugFile_[0] << (msgTime - startTime_) << " "
@@ -448,15 +446,17 @@ private:
   std::shared_ptr<std::thread> thread_;
   bool keepRunning_{true};
   // -- misc other stuff
-  bool avoidTearing_{true};  // keep integrating until frame complete
-  ros::Time startTime_;      // time stamp on first incoming message
-  std_msgs::Header header_;  // prepared message header
+  bool avoidTearing_{true};          // keep integrating until frame complete
+  ros::Time startTime_;              // time stamp on first incoming message
+  std_msgs::Header header_;          // prepared message header
 
 #ifdef DEBUG
   std::ofstream rateDebugFile_;
   std::ofstream intDebugFile_[2];
   std::ofstream winDebugFile_[2];
   std::ofstream tearingFile_;
+  int y_min_;  // for frame debugging
+  int y_max_;
 #endif
 };
 }  // namespace event_ros_tools

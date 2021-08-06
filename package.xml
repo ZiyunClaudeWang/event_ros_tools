@@ -17,6 +17,7 @@
   <depend>nodelet</depend>
   <depend>image_transport</depend>
   <depend>cv_bridge</depend>
+  <depend>dynamic_reconfigure</depend>
 
   <exec_depend>nodelet_rosbag</exec_depend>
   <exec_depend>metavision_ros_driver</exec_depend>

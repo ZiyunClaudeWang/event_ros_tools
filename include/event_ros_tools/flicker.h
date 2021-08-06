@@ -16,9 +16,10 @@
 #ifndef EVENT_ROS_TOOLS_FLICKER_H_
 #define EVENT_ROS_TOOLS_FLICKER_H_
 
-#define DEBUG
+//#define DEBUG
 
 #include <cv_bridge/cv_bridge.h>
+#include <dynamic_reconfigure/server.h>
 #include <image_transport/image_transport.h>
 #include <math.h>
 #include <ros/ros.h>
@@ -33,6 +34,8 @@
 #include <opencv2/imgproc.hpp>
 #include <thread>
 
+#include "event_ros_tools/FlickerDynConfig.h"
+
 #ifdef DEBUG
 #include <fstream>
 #endif
@@ -43,6 +46,8 @@ template <class MsgType>
 class Flicker
 {
 public:
+  using Config = FlickerDynConfig;
+
   Flicker(const ros::NodeHandle & nh) : nh_(nh)
   {
 #ifdef DEBUG
@@ -72,12 +77,17 @@ public:
   bool initialize()
   {
     thread_ = std::make_shared<std::thread>(&Flicker::publishingThread, this);
-    decayRate_ = 1.0 / nh_.param<double>("averaging_time", 0.5);
     binInterval_ = nh_.param<double>("bin_interval", 1e-3);
     binIntervalInv_ = 1.0 / binInterval_;
-    warmupBinCount_ = (int)(4.0 / decayRate_ / binInterval_);
     warmupPeriodCount_ = nh_.param<int>("number_of_warmup_periods", 10);
     binDuration_ = ros::Duration(binInterval_);
+    // NOTE: must hook up the dyn reconfig server here!
+    // It will issue a callback in-thread so subsequently all parameters
+    // (e.g. decayRate_) are initialized properly BEFORE subscribing to
+    // events
+    configServer_.reset(new dynamic_reconfigure::Server<Config>(nh_));
+    configServer_->setCallback(boost::bind(&Flicker::configure, this, _1, _2));
+
     int qs = nh_.param<int>("event_queue_size", 1000);
     sub_ = nh_.subscribe("events", qs, &Flicker::eventCallback, this);
     image_transport::ImageTransport it(nh_);
@@ -90,8 +100,6 @@ public:
       rate_[i] = 1e3;  // assume 1kev rate to start
       dt_ = 0;
       isHigh_[i] = false;
-      lead_[i] = ros::Duration(nh_.param<double>("lead_time", 1e-3));
-      duration_[i] = ros::Duration(nh_.param<double>("duration", 5e-3));
     }
     ROS_INFO_STREAM("flicker initialized!");
     return (true);
@@ -107,6 +115,19 @@ private:
     ros::Time time;
     std::shared_ptr<cv::Mat> image;
   };
+
+  void configure(Config & config, int level)
+  {
+    (void)level;
+    decayRate_ = 1.0 / config.rate_averaging_time;
+    warmupBinCount_ = (int)(4.0 / decayRate_ / binInterval_);
+    for (int i = 0; i < 2; i++) {
+      lead_[i] = ros::Duration(config.lead_time);
+      duration_[i] = ros::Duration(config.duration);
+    }
+    avoidTearing_ = config.avoid_tearing;
+    integrateEventType_ = config.use_on_events ? 1 : 0;
+  }
 
   void updateStatistics(const MsgType & msg)
   {
@@ -178,7 +199,9 @@ private:
       lastSequence_ = msg.header.seq;
       lastPrintTime_ = msg.header.stamp;
       lastBinTime_ = msg.header.stamp;
+#ifdef DEBUG
       startTime_ = msg.header.stamp;
+#endif
       for (int i = 0; i < 2; i++) {
         highTime_[i] = msg.header.stamp;
         timeWindowStart_[i] = timeWindowEnd_[i] = msg.header.stamp;
@@ -236,9 +259,9 @@ private:
           dt_ = dt_ * (1.0 - alpha) + dt * alpha;
           dtSumSq_ = dtSumSq_ * (1.0 - alpha) + dt * dt * alpha;
         } else {
-          ROS_WARN_STREAM(
-            "bad dt update: " << dt << " vs avg: " << dt_
-                              << " stddev: " << std::sqrt(dtCov));
+          ROS_WARN(
+            "dropped dt update: %7.4f vs avg: %7.4f+-%7.4f", dt, dt_,
+            std::sqrt(dtCov));
         }
         if (!periodEstablished_) {
           if (warmupPeriodCount_ > 0) {
@@ -341,7 +364,7 @@ private:
     y_min_ = msg.height;
     y_max_ = -1;
 #endif
-    const int EVENT_TYPE_TO_USE = 0;
+    const int EVENT_TYPE_TO_USE = integrateEventType_;
     bool imageComplete(false);
     for (const auto & ev : msg.events) {
       const auto t = ev.ts;
@@ -401,9 +424,6 @@ private:
   }
 
   // ------- variables
-  ros::NodeHandle nh_;
-  ros::Subscriber sub_;
-  image_transport::Publisher imagePub_;
   // -- related to statistics
   ros::Duration printInterval_{1.0};  // time between statistics logging
   float maxRate_{0};                  // maximum total ON+OFF event rate
@@ -429,33 +449,37 @@ private:
   double dt_;                        // current estimated signal period
   double dtSumSq_{0};                // avg sum of sq of signal period
   // -- related to integration time window management and slope detection
-  ros::Duration duration_[2];        // time window width for integration
-  ros::Duration lead_[2];            // lead time for capture window
-  ros::Time highTime_[2];            // last time signal went high
-  ros::Time timeWindowStart_[2];     // start of integration window
-  ros::Time timeWindowEnd_[2];       // end of integration window
-  bool isHigh_[2];                   // whether rate is currently high or low
+  ros::Duration duration_[2];     // time window width for integration
+  ros::Duration lead_[2];         // lead time for capture window
+  ros::Time highTime_[2];         // last time signal went high
+  ros::Time timeWindowStart_[2];  // start of integration window
+  ros::Time timeWindowEnd_[2];    // end of integration window
+  bool isHigh_[2];                // whether rate is currently high or low
   // -- related to actual integration
-  bool isIntegrating_{false};        // true while image integration happens
-  bool keepIntegrating_{false};      // control integration beyond time slice
-  std::shared_ptr<cv::Mat> image_;   // working image being integrated
+  int integrateEventType_{1};       // use 0=OFF or 1=ON events
+  bool isIntegrating_{false};       // true while image integration happens
+  bool keepIntegrating_{false};     // control integration beyond time slice
+  bool avoidTearing_{true};         // keep integrating until frame complete
+  std::shared_ptr<cv::Mat> image_;  // working image being integrated
   // -- related to multithreading
   std::mutex mutex_;
   std::condition_variable cv_;
   std::deque<StampedImage> imageQueue_;
   std::shared_ptr<std::thread> thread_;
   bool keepRunning_{true};
-  // -- misc other stuff
-  bool avoidTearing_{true};          // keep integrating until frame complete
-  ros::Time startTime_;              // time stamp on first incoming message
-  std_msgs::Header header_;          // prepared message header
-
+  // -- ROS related stuff
+  ros::NodeHandle nh_;
+  ros::Subscriber sub_;
+  image_transport::Publisher imagePub_;
+  std_msgs::Header header_;  // prepared message header
+  std::shared_ptr<dynamic_reconfigure::Server<Config>> configServer_;
 #ifdef DEBUG
   std::ofstream rateDebugFile_;
   std::ofstream intDebugFile_[2];
   std::ofstream winDebugFile_[2];
   std::ofstream tearingFile_;
-  int y_min_;  // for frame debugging
+  ros::Time startTime_;  // time stamp on first incoming message
+  int y_min_;            // for frame debugging
   int y_max_;
 #endif
 };

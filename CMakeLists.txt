@@ -8,14 +8,19 @@ find_package(catkin REQUIRED COMPONENTS
   prophesee_event_msgs
   roscpp
   nodelet
+  dynamic_reconfigure
   image_transport
   cv_bridge
   )
 
 find_package(OpenCV REQUIRED)
 
-catkin_package(
-)
+generate_dynamic_reconfigure_options(
+  cfg/FlickerDyn.cfg
+  )
+
+catkin_package(CATKIN_DEPENDS dynamic_reconfigure)
+
 
 include_directories(
   include

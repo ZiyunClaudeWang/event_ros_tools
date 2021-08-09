@@ -28,7 +28,11 @@ include_directories(
   ${OpenCV_INCLUDE_DIRS}
 )
 
-
+#
+# ------ denoiser helper library
+#
+add_library(denoiser src/denoiser.cpp)
+target_link_libraries(denoiser ${OpenCV_LIBS} ${catkin_LIBRARIES})
 #
 # --------- event slicer ------------
 #
@@ -49,7 +53,7 @@ target_link_libraries(slicer_node ${OpenCV_LIBS} ${catkin_LIBRARIES})
 #target_link_libraries(flicker_nodelet ${OpenCV_LIBS} ${catkin_LIBRARIES})
 # node
 add_executable(flicker_node src/flicker_node.cpp)
-target_link_libraries(flicker_node ${OPENCV_LIBS} ${catkin_LIBRARIES})
+target_link_libraries(flicker_node denoiser ${OPENCV_LIBS} ${catkin_LIBRARIES})
 
 
 #############

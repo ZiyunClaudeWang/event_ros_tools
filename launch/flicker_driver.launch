@@ -1,0 +1,36 @@
+<launch>
+  <arg name="bag"/>
+  <arg name="bias_file" default="$(find
+				 metavision_ros_driver)/biases/silky_ev_cam.bias"/>
+  <!-- manager nodelet -->
+  <node pkg="nodelet" type="nodelet" name="flicker_driver"
+	args="manager" output="screen"/>
+
+  <!-- flicker nodelet -->
+  <node pkg="nodelet" type="nodelet" name="flicker_nodelet"
+	args="load event_ros_tools/FlickerNodelet flicker_driver" output="screen">
+    <param name="message_type" value="dvs"/>
+    <param name="denoise" value="true"/>
+    <param name="denoise_num_frames" value="1"/>
+    <param name="statistics_print_interval" value="1.0"/>
+    <remap from="~image" to="/flicker/image"/>
+    <!-- remap the events topic -->
+    <remap from="~events" to="/metavision_driver/events"/>
+  </node>
+
+  <!-- driver nodelet -->
+  <node pkg="nodelet" type="nodelet"
+    name="metavision_driver" args="load
+				metavision_ros_driver/DriverNodelet flicker_driver"
+    clear_params="true" output="screen">
+    <param name="message_time_threshold" value="0.0001"/>
+    <!-- time interval between printout of rate statistics -->
+    <param name="statistics_print_interval" value="10.0"/>
+    <!-- from where to load the bias file (if any)  -->
+    <param name="bias_file" value="$(arg bias_file)"/>
+    <!-- run in multithreaded mode -->
+    <param name="use_multithreading" value="true"/>
+    <!-- what kind of messages to write (dvs or prophesee) -->
+    <param name="message_type" value="dvs"/>
+  </node>
+</launch>

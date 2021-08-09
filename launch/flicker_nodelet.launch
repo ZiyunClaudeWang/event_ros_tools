@@ -1,7 +1,8 @@
 <launch>
   <arg name="event_topic" default="/metavision_driver/events"/>
-  <node pkg="event_ros_tools" type="flicker_node" name="flicker" clear_params="true"
-	output="screen">
+  <node pkg="nodelet" type="nodelet"
+    name="flicker_nodelet" args="standalone event_ros_tools/FlickerNodelet"
+    clear_params="true" output="screen">
     <!-- what kind of messages to subscribe to (dvs or prophesee) -->
     <param name="message_type" value="dvs"/>
     <param name="statistics_print_interval" value="1.0"/>

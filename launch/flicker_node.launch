@@ -4,7 +4,10 @@
 	output="screen">
     <!-- what kind of messages to subscribe to (dvs or prophesee) -->
     <param name="message_type" value="dvs"/>
+    <param name="denoise" value="true"/>
+    <param name="denoise_num_frames" value="1"/>
     <param name="statistics_print_interval" value="1.0"/>
+    <remap from="~image" to="/flicker/image"/>
     <!-- remap the events topic -->
     <remap from="~events" to="$(arg event_topic)"/>
   </node>

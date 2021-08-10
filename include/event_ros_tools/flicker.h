@@ -58,6 +58,8 @@ public:
     intDebugFile_[1].open("int_debug_ON.txt");
     winDebugFile_[0].open("win_debug_OFF.txt");
     winDebugFile_[1].open("win_debug_ON.txt");
+    highLowDebugFile_[0].open("high_low_OFF.txt");
+    highLowDebugFile_[1].open("high_low_ON.txt");
     tearingFile_.open("tearing.txt");
 #endif
   }
@@ -92,8 +94,6 @@ public:
     configServer_.reset(new dynamic_reconfigure::Server<Config>(nh_));
     configServer_->setCallback(boost::bind(&Flicker::configure, this, _1, _2));
 
-    int qs = nh_.param<int>("event_queue_size", 1000);
-    sub_ = nh_.subscribe("events", qs, &Flicker::eventCallback, this);
     image_transport::ImageTransport it(nh_);
     imagePub_ = it.advertise("image", 1);
     double printInterval;
@@ -102,9 +102,13 @@ public:
     for (int i = 0; i < 2; i++) {
       eventCount_[i] = 0;
       rate_[i] = 1e3;  // assume 1kev rate to start
+      rateCov_[i] = 0;
       dt_ = 0;
       isHigh_[i] = false;
     }
+    // NOTE: must wait with subscribing until init is complete!
+    int qs = nh_.param<int>("event_queue_size", 1000);
+    sub_ = nh_.subscribe("events", qs, &Flicker::eventCallback, this);
     ROS_INFO_STREAM("flicker initialized!");
     return (true);
   }
@@ -266,10 +270,11 @@ private:
       const double rate = eventCount_[i] * binIntervalInv_;
       const double rdiff = rate - rate_[i];
       const double rateStd = std::sqrt(rateCov_[i] - rate_[i] * rate_[i]);
-      const bool isHighNow = rdiff > rate_[i] + 1.0 * rateStd;
-      if (!isHigh_[i] && isHighNow) {
+      const bool isHighNow = rdiff > 0.5 * rateStd;
+      const double dt = (t - highTime_[i]).toSec();
+      const bool isUpSlope = !isHigh_[i] && isHighNow;
+      if (isUpSlope && (!periodEstablished_ || dt > 0.25 * dt_)) {
         // crossed the peak threshold
-        const double dt = (t - highTime_[i]).toSec();
         const double alpha = periodEstablished_ ? 0.1 : 0.2;
         // cannot ask for err less than 2 * time bin
         const double minErr = 4 * binInterval_ * binInterval_;
@@ -317,10 +322,15 @@ private:
           << (timeWindowEnd_[i_oth] - startTime_) << std::endl;
 #endif
       }  // if switched from low to high
-      const bool isLowNow = rate < rate_[i] - 0.1 * rateStd;
+      const bool isLowNow = rdiff < -0.1 * rateStd;
       if (isHigh_[i] && isLowNow) {
         isHigh_[i] = false;  // reset high indicator
       }
+#ifdef DEBUG
+      highLowDebugFile_[i] << (t - startTime_) << " " << (int)isHighNow << " "
+                           << (int)isLowNow << " " << (int)isHigh_[i] << " "
+                           << (int)periodEstablished_ << std::endl;
+#endif
     }
   }
 
@@ -500,11 +510,12 @@ private:
   std::ofstream rateDebugFile_;
   std::ofstream intDebugFile_[2];
   std::ofstream winDebugFile_[2];
+  std::ofstream highLowDebugFile_[2];
   std::ofstream tearingFile_;
   ros::Time startTime_;  // time stamp on first incoming message
   int y_min_;            // for frame debugging
   int y_max_;
 #endif
-  };
+};
 }  // namespace event_ros_tools
 #endif

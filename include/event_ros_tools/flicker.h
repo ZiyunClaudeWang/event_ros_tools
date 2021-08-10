@@ -113,9 +113,11 @@ private:
   int make_odd(int i) { return (i % 2 == 0 ? i + 1 : i); }
   void configure(Config & config, int level)
   {
-    (void)level;
     decayRate_ = 1.0 / config.rate_averaging_time;
-    warmupBinCount_ = (int)(4.0 / decayRate_ / binInterval_);
+    if (level < 0) {
+      // only set warmup bin count on initial call
+      warmupBinCount_ = (int)(4.0 / decayRate_ / binInterval_);
+    }
     for (int i = 0; i < 2; i++) {
       lead_[i] = ros::Duration(config.lead_time);
       duration_[i] = ros::Duration(config.duration);

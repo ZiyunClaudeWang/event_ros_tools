@@ -4,9 +4,16 @@
     name="flicker_nodelet" args="standalone event_ros_tools/FlickerNodelet"
     clear_params="true" output="screen">
     <!-- what kind of messages to subscribe to (dvs or prophesee) -->
+    <param name="avoid_tearing" value="false"/>
+    <param name="lead_time" value="0.0015"/>
+    <param name="duration" value="0.002"/>
+    <param name="denoise" value="false"/>
+    <param name="denoise_num_frames" value="1"/>
     <param name="message_type" value="dvs"/>
     <param name="statistics_print_interval" value="1.0"/>
     <!-- remap the events topic -->
     <remap from="~events" to="$(arg event_topic)"/>
+    <!-- remap the image topic -->
+    <remap from="~image" to="/flicker/image"/>
   </node>
 </launch>

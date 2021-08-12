@@ -17,6 +17,7 @@
 #define EVENT_ROS_TOOLS_FLICKER_H_
 
 //#define DEBUG
+//#define DEBUG_FROM_ZERO
 
 #include <cv_bridge/cv_bridge.h>
 #include <dynamic_reconfigure/server.h>
@@ -214,7 +215,11 @@ private:
       lastPrintTime_ = msg.header.stamp;
       lastBinTime_ = msg.header.stamp;
 #ifdef DEBUG
+#ifdef DEBUG_FROM_ZERO
+      startTime_ = ros::Time(0);
+#else
       startTime_ = msg.header.stamp;
+#endif
 #endif
       for (int i = 0; i < 2; i++) {
         highTime_[i] = msg.header.stamp;
@@ -223,10 +228,11 @@ private:
     }
     updateStatistics(msg);
     if (imagePub_.getNumSubscribers() != 0) {
-      if (updateImage(msg)) {
+      ros::Time stamp;
+      if (updateImage(msg, &stamp)) {
         {
           std::unique_lock<std::mutex> lock(mutex_);
-          imageQueue_.push_front(StampedImage(msg.header.stamp, image_));
+          imageQueue_.push_front(StampedImage(stamp, image_));
           cv_.notify_all();
         }
         resetImage(image_->cols, image_->rows);
@@ -388,7 +394,7 @@ private:
 #endif
   }
 
-  bool updateImage(const MsgType & msg)
+  bool updateImage(const MsgType & msg, ros::Time * stamp)
   {
 #ifdef DEBUG
     y_min_ = msg.height;
@@ -415,6 +421,7 @@ private:
           keepIntegrating_ = false;        // "frame" is complete, stop it.
           imageComplete = true;            // done with image.
           isIntegrating_ = false;
+          *stamp = t;
         }
         continue;
       }
@@ -431,6 +438,7 @@ private:
             } else {
               isIntegrating_ = false;
               imageComplete = true;
+              *stamp = t;
             }
           }
         }

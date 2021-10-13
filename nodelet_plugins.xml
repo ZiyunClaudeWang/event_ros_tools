@@ -1,18 +1,20 @@
-<library path="lib/libslicer_nodelet">
-  <class name="event_ros_tools/SlicerNodelet"
-         type="event_ros_tools::SlicerNodelet"
-         base_class_type="nodelet::Nodelet">
-    <description>
-      nodelet for event slicing
-    </description>
-  </class>
-</library>
-<library path="lib/libflicker_nodelet">
-  <class name="event_ros_tools/FlickerNodelet"
-         type="event_ros_tools::FlickerNodelet"
-         base_class_type="nodelet::Nodelet">
-    <description>
-      nodelet for flicker image slicing
-    </description>
-  </class>
-</library>
+<class_libraries>
+  <library path="lib/libslicer_nodelet">
+    <class name="event_ros_tools/SlicerNodelet"
+           type="event_ros_tools::SlicerNodelet"
+           base_class_type="nodelet::Nodelet">
+      <description>
+	nodelet for event slicing
+      </description>
+    </class>
+  </library>
+  <library path="lib/libflicker_nodelet">
+    <class name="event_ros_tools/FlickerNodelet"
+           type="event_ros_tools::FlickerNodelet"
+           base_class_type="nodelet::Nodelet">
+      <description>
+	nodelet for flicker image slicing
+      </description>
+    </class>
+  </library>
+</class_libraries>

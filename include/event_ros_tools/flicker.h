@@ -36,7 +36,6 @@
 #include <thread>
 
 #include "event_ros_tools/FlickerDynConfig.h"
-#include "event_ros_tools/denoiser.h"
 #include "event_ros_tools/stamped_image.h"
 
 #ifdef DEBUG
@@ -87,7 +86,6 @@ public:
     binIntervalInv_ = 1.0 / binInterval_;
     warmupPeriodCount_ = nh_.param<int>("number_of_warmup_periods", 10);
     binDuration_ = ros::Duration(binInterval_);
-    denoiser_ = std::make_shared<Denoiser>();
     // NOTE: must hook up the dyn reconfig server here!
     // It will issue a callback in-thread so subsequently all parameters
     // (e.g. decayRate_) are initialized properly BEFORE subscribing to
@@ -129,19 +127,6 @@ private:
     }
     avoidTearing_ = config.avoid_tearing;
     integrateEventType_ = config.use_on_events ? 1 : 0;
-    if (denoiser_) {
-      denoise_ = config.denoise;
-      const int nf = make_odd(config.denoise_num_frames);
-      denoiser_->setNumberOfFrames(nf);
-      config.denoise_num_frames = nf;
-      const int tws = make_odd(config.denoise_template_window_size);
-      denoiser_->setTemplateWindowSize(tws);
-      config.denoise_template_window_size = tws;
-      const int sws = make_odd(config.denoise_search_window_size);
-      denoiser_->setSearchWindowSize(sws);
-      config.denoise_search_window_size = sws;
-      denoiser_->setH(config.denoise_h);
-    }
   }
 
   void updateStatistics(const MsgType & msg)
@@ -250,19 +235,9 @@ private:
 #endif
     cv::Mat normImg;
     cv::normalize(*image, normImg, 0, 255, cv::NORM_MINMAX, CV_8U);
-    if (denoise_) {
-      StampedImage orig(header.stamp, std::make_shared<cv::Mat>());
-      cv::equalizeHist(normImg, *(orig.image));
-      StampedImage denoised = denoiser_->addFrame(orig);
-      if (denoised.image) {
-        imagePub_.publish(
-          cv_bridge::CvImage(header, "mono8", *denoised.image).toImageMsg());
-      }
-    } else {
-      cv::Mat ei;
-      cv::equalizeHist(normImg, ei);
-      imagePub_.publish(cv_bridge::CvImage(header, "mono8", ei).toImageMsg());
-    }
+    cv::Mat ei;
+    cv::equalizeHist(normImg, ei);
+    imagePub_.publish(cv_bridge::CvImage(header, "mono8", ei).toImageMsg());
   }
 
   void resetImage(const int width, const int height)
@@ -499,9 +474,6 @@ private:
   bool keepIntegrating_{false};     // control integration beyond time slice
   bool avoidTearing_{true};         // keep integrating until frame complete
   std::shared_ptr<cv::Mat> image_;  // working image being integrated
-  // -- denoising
-  bool denoise_{false};                 // true if denoising should happen
-  std::shared_ptr<Denoiser> denoiser_;  // denoiser object
   // -- related to multithreading
   std::mutex mutex_;
   std::condition_variable cv_;

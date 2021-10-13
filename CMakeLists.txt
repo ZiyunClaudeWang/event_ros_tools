@@ -7,6 +7,7 @@ find_package(catkin REQUIRED COMPONENTS
   dvs_msgs
   prophesee_event_msgs
   roscpp
+  rosbag
   nodelet
   dynamic_reconfigure
   image_transport
@@ -29,11 +30,6 @@ include_directories(
 )
 
 #
-# ------ denoiser helper library
-#
-add_library(denoiser src/denoiser.cpp)
-target_link_libraries(denoiser ${OpenCV_LIBS} ${catkin_LIBRARIES})
-#
 # --------- event slicer ------------
 #
 # nodelet
@@ -48,10 +44,16 @@ target_link_libraries(slicer_node ${OpenCV_LIBS} ${catkin_LIBRARIES})
 #
 # nodelet
 add_library(flicker_nodelet src/flicker_nodelet.cpp)
-target_link_libraries(flicker_nodelet denoiser ${OpenCV_LIBS} ${catkin_LIBRARIES})
+target_link_libraries(flicker_nodelet ${OpenCV_LIBS} ${catkin_LIBRARIES})
 # node
 add_executable(flicker_node src/flicker_node.cpp)
-target_link_libraries(flicker_node denoiser ${OPENCV_LIBS} ${catkin_LIBRARIES})
+target_link_libraries(flicker_node ${OPENCV_LIBS} ${catkin_LIBRARIES})
+
+#
+# --------- bag to text converter -----
+#
+add_executable(bag_to_text src/bag_to_text.cpp)
+target_link_libraries(bag_to_text ${catkin_LIBRARIES})
 
 
 #############

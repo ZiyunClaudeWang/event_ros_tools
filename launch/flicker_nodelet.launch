@@ -5,10 +5,8 @@
     clear_params="true" output="screen">
     <!-- what kind of messages to subscribe to (dvs or prophesee) -->
     <param name="avoid_tearing" value="false"/>
-    <param name="lead_time" value="0.0015"/>
-    <param name="duration" value="0.002"/>
-    <param name="denoise" value="false"/>
-    <param name="denoise_num_frames" value="1"/>
+    <param name="lead_time" value="0.002"/>
+    <param name="duration" value="0.005"/>
     <param name="message_type" value="dvs"/>
     <param name="statistics_print_interval" value="1.0"/>
     <!-- remap the events topic -->

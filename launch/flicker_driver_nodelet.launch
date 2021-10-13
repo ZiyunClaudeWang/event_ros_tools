@@ -1,19 +1,29 @@
 <launch>
+  <arg name="bag"/>
   <arg name="bias_file" default="$(find
 				 metavision_ros_driver)/biases/silky_ev_cam.bias"/>
-  <!-- flicker node -->
-  <node pkg="event_ros_tools" type="flicker_node" name="flicker"
-	clear_params="true" output="screen">
+  <!-- manager nodelet -->
+  <node pkg="nodelet" type="nodelet" name="flicker_driver"
+	args="manager" output="screen"/>
+
+  <!-- flicker nodelet -->
+  <node pkg="nodelet" type="nodelet" name="flicker_nodelet"
+	args="load event_ros_tools/FlickerNodelet flicker_driver"
+	output="screen">
     <param name="message_type" value="dvs"/>
+    <param name="avoid_tearing" value="true"/>
+    <param name="lead_time" value="0.002"/>
+    <param name="duration" value="0.005"/>
     <param name="statistics_print_interval" value="1.0"/>
     <remap from="~image" to="/flicker/image"/>
     <!-- remap the events topic -->
     <remap from="~events" to="/metavision_driver/events"/>
   </node>
 
-  <!-- driver node -->
-  <node pkg="metavision_ros_driver" type="driver_node"
-    name="metavision_driver"
+  <!-- driver nodelet -->
+  <node pkg="nodelet" type="nodelet"
+	name="metavision_driver"
+	args="load metavision_ros_driver/DriverNodelet flicker_driver"
     clear_params="true" output="screen">
     <param name="message_time_threshold" value="0.0001"/>
     <!-- time interval between printout of rate statistics -->

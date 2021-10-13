@@ -10,8 +10,6 @@
   <node pkg="nodelet" type="nodelet" name="flicker_nodelet"
 	args="load event_ros_tools/FlickerNodelet flicker_driver" output="screen">
     <param name="message_type" value="dvs"/>
-    <param name="denoise" value="true"/>
-    <param name="denoise_num_frames" value="1"/>
     <param name="statistics_print_interval" value="1.0"/>
     <remap from="~image" to="/flicker/image"/>
     <!-- remap the events topic -->

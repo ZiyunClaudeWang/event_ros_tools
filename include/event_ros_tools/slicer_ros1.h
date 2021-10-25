@@ -21,7 +21,6 @@
 
 #include <memory>
 
-#include "event_ros_tools/event.h"
 #include "event_ros_tools/event_processor.h"
 #include "event_ros_tools/event_subscriber_ros1.h"
 #include "event_ros_tools/image_updater.h"

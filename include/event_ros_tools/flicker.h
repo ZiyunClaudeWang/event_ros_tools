@@ -13,11 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef EVENT_ROS_TOOLS_FLICKER_H_
-#define EVENT_ROS_TOOLS_FLICKER_H_
+#ifndef EVENT_ROS_TOOLS__FLICKER_H_
+#define EVENT_ROS_TOOLS__FLICKER_H_
 
-//#define DEBUG
-//#define DEBUG_FROM_ZERO
+// #define DEBUG
+// #define DEBUG_FROM_ZERO
 
 #include <cv_bridge/cv_bridge.h>
 #include <dynamic_reconfigure/server.h>
@@ -50,7 +50,7 @@ class Flicker
 public:
   using Config = FlickerDynConfig;
 
-  Flicker(const ros::NodeHandle & nh) : nh_(nh)
+  explicit Flicker(const ros::NodeHandle & nh) : nh_(nh)
   {
 #ifdef DEBUG
     rateDebugFile_.open("rate_debug_file.txt");
@@ -80,8 +80,7 @@ public:
 
   bool initialize()
   {
-    thread_ =
-      std::make_shared<std::thread>(&Flicker::imageProcessingThread, this);
+    thread_ = std::make_shared<std::thread>(&Flicker::imageProcessingThread, this);
     binInterval_ = nh_.param<double>("bin_interval", 1e-3);
     binIntervalInv_ = 1.0 / binInterval_;
     warmupPeriodCount_ = nh_.param<int>("number_of_warmup_periods", 10);
@@ -143,8 +142,7 @@ private:
     totalMsgs_++;
     lastSequence_ = msg.header.seq;
     if (t_end > lastPrintTime_ + printInterval_) {
-      const float avgRate =
-        1e-6 * totalEvents_ * (totalTime_ > 0 ? 1.0 / totalTime_ : 0);
+      const float avgRate = 1e-6 * totalEvents_ * (totalTime_ > 0 ? 1.0 / totalTime_ : 0);
       const float avgSize = totalEvents_ / (float)totalMsgs_;
       ROS_INFO(
         "rcv msg sz: %4d ev,  rt[Mevs] avg: %7.3f, max: %7.3f, "
@@ -225,8 +223,7 @@ private:
     }
   }
 
-  void publishImage(
-    const std_msgs::Header & header, const std::shared_ptr<cv::Mat> & image)
+  void publishImage(const std_msgs::Header & header, const std::shared_ptr<cv::Mat> & image)
   {
 #ifdef DEBUG_IMAGE
     double min, max;
@@ -265,9 +262,7 @@ private:
           dt_ = dt_ * (1.0 - alpha) + dt * alpha;
           dtSumSq_ = dtSumSq_ * (1.0 - alpha) + dt * dt * alpha;
         } else {
-          ROS_WARN(
-            "dropped dt update: %7.4f vs avg: %7.4f+-%7.4f", dt, dt_,
-            std::sqrt(dtCov));
+          ROS_WARN("dropped dt update: %7.4f vs avg: %7.4f+-%7.4f", dt, dt_, std::sqrt(dtCov));
         }
         if (!periodEstablished_) {
           if (warmupPeriodCount_ > 0) {
@@ -275,14 +270,12 @@ private:
           }
           if (warmupPeriodCount_ == 0) {
             // wait until covariance is reasonable
-            const double sd =
-              std::max(std::sqrt(dtSumSq_ - dt_ * dt_), binInterval_);
+            const double sd = std::max(std::sqrt(dtSumSq_ - dt_ * dt_), binInterval_);
             if (sd < 0.05 * dt_) {
               ROS_INFO_STREAM("period established as " << dt_ << "s");
               periodEstablished_ = true;
             } else {
-              ROS_INFO(
-                "period: %5.3fs, waiting for lower noise (%5.3fs)", dt_, sd);
+              ROS_INFO("period: %5.3fs, waiting for lower noise (%5.3fs)", dt_, sd);
             }
           }
         }
@@ -297,10 +290,9 @@ private:
         timeWindowStart_[i_oth] = tws;
         timeWindowEnd_[i_oth] = timeWindowStart_[i_oth] + duration_[i_oth];
 #ifdef DEBUG
-        winDebugFile_[i_oth]
-          << (t - startTime_) << " " << (highTime_[i_oth] - startTime_) << " "
-          << (timeWindowStart_[i_oth] - startTime_) << " "
-          << (timeWindowEnd_[i_oth] - startTime_) << std::endl;
+        winDebugFile_[i_oth] << (t - startTime_) << " " << (highTime_[i_oth] - startTime_) << " "
+                             << (timeWindowStart_[i_oth] - startTime_) << " "
+                             << (timeWindowEnd_[i_oth] - startTime_) << std::endl;
 #endif
       }  // if switched from low to high
       const bool isLowNow = rdiff < -0.1 * rateStd;
@@ -308,9 +300,8 @@ private:
         isHigh_[i] = false;  // reset high indicator
       }
 #ifdef DEBUG
-      highLowDebugFile_[i] << (t - startTime_) << " " << (int)isHighNow << " "
-                           << (int)isLowNow << " " << (int)isHigh_[i] << " "
-                           << (int)periodEstablished_ << std::endl;
+      highLowDebugFile_[i] << (t - startTime_) << " " << (int)isHighNow << " " << (int)isLowNow
+                           << " " << (int)isHigh_[i] << " " << (int)periodEstablished_ << std::endl;
 #endif
     }
   }
@@ -344,8 +335,8 @@ private:
         ROS_INFO(
           "established rate averages OFF: %6.3f(+-%6.3f)Mevs, ON: "
           "%6.3f(+-%6.3f)Mevs",
-          rate_[0] * 1e-6, std::sqrt(rateCov_[0] - rate_[0] * rate_[0]) * 1e-6,
-          rate_[1] * 1e-6, std::sqrt(rateCov_[1] - rate_[1] * rate_[1]) * 1e-6);
+          rate_[0] * 1e-6, std::sqrt(rateCov_[0] - rate_[0] * rate_[0]) * 1e-6, rate_[1] * 1e-6,
+          std::sqrt(rateCov_[1] - rate_[1] * rate_[1]) * 1e-6);
         ROS_INFO("now waiting for period to be established");
         // initialize flip time and window start
         for (int i = 0; i < 2; i++) {
@@ -418,20 +409,17 @@ private:
           }
         }
       }
-
     }  // loop over events
 #ifdef DEBUG
     const auto msgTime = msg.header.stamp;
     if (y_min_ < (int)msg.height && y_max_ > -1) {
-      tearingFile_ << (msgTime - startTime_) << " " << y_min_ << " " << y_max_
-                   << std::endl;
+      tearingFile_ << (msgTime - startTime_) << " " << y_min_ << " " << y_max_ << std::endl;
     }
     intDebugFile_[0] << (msgTime - startTime_) << " "
-                     << (timeWindowStart_[EVENT_TYPE_TO_USE] - startTime_)
-                     << " " << (timeWindowEnd_[EVENT_TYPE_TO_USE] - startTime_)
-                     << " " << (int)isIntegrating_ << " "
-                     << (int)keepIntegrating_ << " " << (int)imageComplete
-                     << std::endl;
+                     << (timeWindowStart_[EVENT_TYPE_TO_USE] - startTime_) << " "
+                     << (timeWindowEnd_[EVENT_TYPE_TO_USE] - startTime_) << " "
+                     << (int)isIntegrating_ << " " << (int)keepIntegrating_ << " "
+                     << (int)imageComplete << std::endl;
 #endif
     return (imageComplete);
   }
@@ -498,4 +486,4 @@ private:
 #endif
 };
 }  // namespace event_ros_tools
-#endif
+#endif  // EVENT_ROS_TOOLS__FLICKER_H_

@@ -13,21 +13,37 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef EVENT_ROS_TOOLS__STAMPED_IMAGE_H_
-#define EVENT_ROS_TOOLS__STAMPED_IMAGE_H_
+#ifndef EVENT_ROS_TOOLS__STATISTICS_H_
+#define EVENT_ROS_TOOLS__STATISTICS_H_
 
-#include <ros/ros.h>
+#include <stddef.h>
+#include <stdint.h>
 
-#include <memory>
-#include <opencv2/core/core.hpp>
+#include <limits>
+#include <string>
 
 namespace event_ros_tools
 {
-struct StampedImage
+class Statistics
 {
-  StampedImage(const ros::Time & t, const std::shared_ptr<cv::Mat> & img) : time(t), image(img) {}
-  ros::Time time;
-  std::shared_ptr<cv::Mat> image;
+public:
+  explicit Statistics(const std::string & loggerName);
+  ~Statistics();
+
+  void setPrintInterval(uint64_t dt) { printInterval_ = dt; }
+  void update(uint64_t t_start, uint64_t t_end, size_t numEvents, uint64_t seq);
+
+private:
+  // ------ variables ----
+  std::string loggerName_;
+  size_t totalMsgs_{0};
+  float maxRate_{0};
+  float totalTime_{0};
+  size_t totalEvents_{0};
+  uint64_t lastPrintTime_{std::numeric_limits<uint64_t>::max()};
+  uint64_t printInterval_{1000000000ULL};
+  uint64_t lastSequence_{0};
+  uint64_t dropped_{0};
 };
 }  // namespace event_ros_tools
-#endif  // EVENT_ROS_TOOLS__STAMPED_IMAGE_H_
+#endif  // EVENT_ROS_TOOLS__STATISTICS_H_

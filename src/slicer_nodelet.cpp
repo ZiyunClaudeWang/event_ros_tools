@@ -13,50 +13,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <dvs_msgs/EventArray.h>
 #include <nodelet/nodelet.h>
-#include <prophesee_event_msgs/EventArray.h>
 #include <ros/ros.h>
 
 #include <memory>
 
-#include "event_ros_tools/slicer.h"
+#include "event_ros_tools/slicer_ros1.h"
 
 namespace event_ros_tools
 {
 class SlicerNodelet : public nodelet::Nodelet
 {
 public:
-  template <class T>
-  std::shared_ptr<Slicer<T>> initSlicer(ros::NodeHandle & pnh)
-  {
-    auto ptr = std::make_shared<Slicer<T>>(pnh);
-    if (!ptr->initialize()) {
-      ROS_ERROR("slicer initialization failed, exiting!");
-    }
-    return (ptr);
-  }
-
   void onInit() override
   {
     nh_ = getPrivateNodeHandle();
-    const std::string msg_mode = nh_.param<std::string>("message_type", "dvs");
-    ROS_INFO_STREAM("running in message mode: " << msg_mode);
-    if (msg_mode == "prophesee") {
-      prophSlicer_ = initSlicer<prophesee_event_msgs::EventArray>(nh_);
-    } else if (msg_mode == "dvs") {
-      dvsSlicer_ = initSlicer<dvs_msgs::EventArray>(nh_);
-    } else {
-      ROS_ERROR_STREAM("exiting due to invalid message mode: " << msg_mode);
-    }
+    slicer_ = std::make_shared<Slicer>(nh_);
   }
 
 private:
   // ------ variables --------
-  std::shared_ptr<event_ros_tools::Slicer<prophesee_event_msgs::EventArray>>
-    prophSlicer_;
-  std::shared_ptr<event_ros_tools::Slicer<dvs_msgs::EventArray>> dvsSlicer_;
   ros::NodeHandle nh_;
+  std::shared_ptr<Slicer> slicer_;
 };
 }  // namespace event_ros_tools
 

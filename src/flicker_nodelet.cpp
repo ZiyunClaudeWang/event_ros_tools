@@ -53,8 +53,7 @@ public:
 
 private:
   // ------ variables --------
-  std::shared_ptr<event_ros_tools::Flicker<prophesee_event_msgs::EventArray>>
-    prophFlicker_;
+  std::shared_ptr<event_ros_tools::Flicker<prophesee_event_msgs::EventArray>> prophFlicker_;
   std::shared_ptr<event_ros_tools::Flicker<dvs_msgs::EventArray>> dvsFlicker_;
   ros::NodeHandle nh_;
 };

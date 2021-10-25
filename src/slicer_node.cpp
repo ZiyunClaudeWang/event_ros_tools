@@ -13,22 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <dvs_msgs/EventArray.h>
-#include <prophesee_event_msgs/EventArray.h>
 #include <ros/ros.h>
 
-#include "event_ros_tools/slicer.h"
-
-template <class T>
-void run_node(ros::NodeHandle & pnh)
-{
-  event_ros_tools::Slicer<T> node(pnh);
-  if (node.initialize()) {
-    ros::spin();
-  } else {
-    ROS_ERROR("slicer initialization failed, exiting!");
-  }
-}
+#include "event_ros_tools/slicer_ros1.h"
 
 int main(int argc, char ** argv)
 {
@@ -36,15 +23,8 @@ int main(int argc, char ** argv)
   ros::NodeHandle pnh("~");
 
   try {
-    const std::string msg_mode = pnh.param<std::string>("message_type", "dvs");
-    ROS_INFO_STREAM("running in message mode: " << msg_mode);
-    if (msg_mode == "prophesee") {
-      run_node<prophesee_event_msgs::EventArray>(pnh);
-    } else if (msg_mode == "dvs") {
-      run_node<dvs_msgs::EventArray>(pnh);
-    } else {
-      ROS_ERROR_STREAM("exiting due to invalid message mode: " << msg_mode);
-    }
+    event_ros_tools::Slicer slicer(pnh);
+    ros::spin();
   } catch (const std::exception & e) {
     ROS_ERROR("%s: %s", pnh.getNamespace().c_str(), e.what());
     return (-1);

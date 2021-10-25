@@ -1,4 +1,4 @@
-// -*-c++-*--------------------------------------------------------------------
+// -*-c++-*---------------------------------------------------------------------------------------
 // Copyright 2021 Bernd Pfrommer <bernd.pfrommer@gmail.com>
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,21 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef EVENT_ROS_TOOLS__STAMPED_IMAGE_H_
-#define EVENT_ROS_TOOLS__STAMPED_IMAGE_H_
-
-#include <ros/ros.h>
-
 #include <memory>
-#include <opencv2/core/core.hpp>
+#include <rclcpp/rclcpp.hpp>
 
-namespace event_ros_tools
+#include "event_ros_tools/slicer_ros2.h"
+
+int main(int argc, char * argv[])
 {
-struct StampedImage
-{
-  StampedImage(const ros::Time & t, const std::shared_ptr<cv::Mat> & img) : time(t), image(img) {}
-  ros::Time time;
-  std::shared_ptr<cv::Mat> image;
-};
-}  // namespace event_ros_tools
-#endif  // EVENT_ROS_TOOLS__STAMPED_IMAGE_H_
+  rclcpp::init(argc, argv);
+  auto node = std::make_shared<event_ros_tools::Slicer>(rclcpp::NodeOptions());
+
+  RCLCPP_INFO(node->get_logger(), "slicer node started up!");
+  rclcpp::spin(node);  // should not return
+  rclcpp::shutdown();
+  return 0;
+}

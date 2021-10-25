@@ -13,21 +13,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef EVENT_ROS_TOOLS__STAMPED_IMAGE_H_
-#define EVENT_ROS_TOOLS__STAMPED_IMAGE_H_
+#ifndef EVENT_ROS_TOOLS__EVENT_PROCESSOR_H_
+#define EVENT_ROS_TOOLS__EVENT_PROCESSOR_H_
 
-#include <ros/ros.h>
-
-#include <memory>
-#include <opencv2/core/core.hpp>
+#ifdef USING_ROS_1
+#include <std_msgs/Header.h>
+#else
+#include <std_msgs/msg/header.hpp>
+#endif
 
 namespace event_ros_tools
 {
-struct StampedImage
+class EventProcessor
 {
-  StampedImage(const ros::Time & t, const std::shared_ptr<cv::Mat> & img) : time(t), image(img) {}
-  ros::Time time;
-  std::shared_ptr<cv::Mat> image;
+public:
+#ifdef USING_ROS_1
+  typedef std_msgs::Header Header;
+#else
+  typedef std_msgs::msg::Header Header;
+#endif
+  virtual ~EventProcessor() {}
+  virtual void messageComplete(
+    const Header & header, uint64_t endTime, uint64_t seq, size_t numEvents) = 0;
+  virtual void imageSize(uint32_t width, uint32_t height) = 0;
+  virtual void event(uint64_t t, uint16_t x, uint16_t y, bool p) = 0;
 };
 }  // namespace event_ros_tools
-#endif  // EVENT_ROS_TOOLS__STAMPED_IMAGE_H_
+#endif  // EVENT_ROS_TOOLS__EVENT_PROCESSOR_H_

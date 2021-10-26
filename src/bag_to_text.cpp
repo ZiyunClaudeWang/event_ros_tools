@@ -25,7 +25,7 @@
 #include <chrono>
 #include <fstream>
 
-using namespace std::chrono;
+using std::chrono;
 
 void usage()
 {

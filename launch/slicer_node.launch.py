@@ -50,9 +50,9 @@ def launch_setup(context, *args, **kwargs):
 def generate_launch_description():
     """Create slicer node by calling opaque function."""
     return launch.LaunchDescription([
-        LaunchArg('image_topic', default_value=['image'],
+        LaunchArg('image_topic', default_value=['/event_camera/image'],
                   description='image topic'),
-        LaunchArg('event_topic', default_value=['events'],
+        LaunchArg('event_topic', default_value=['/event_camera/events'],
                   description='event topic'),
         OpaqueFunction(function=launch_setup)
         ])

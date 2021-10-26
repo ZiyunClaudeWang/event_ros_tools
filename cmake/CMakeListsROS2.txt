@@ -28,6 +28,7 @@ set(ROS2_DEPENDENCIES
   "event_array2_msgs"
   "rclcpp"
   "rclcpp_components"
+  "rosbag2_cpp"
   "image_transport"
   "cv_bridge"
 )
@@ -52,6 +53,13 @@ rclcpp_components_register_nodes(slicer "event_ros_tools::Slicer")
 ament_auto_add_executable(slicer_node
   src/slicer_node_ros2.cpp)
 
+# --- bag to text conversion tool
+ament_auto_add_executable(bag_to_text
+  src/bag_to_text_ros2.cpp)
+
+
+# -------- installation
+
 # the shared library goes into the global lib dir so it can
 # be used as a composable node by other projects
 
@@ -65,6 +73,7 @@ install(TARGETS
 
 install(TARGETS
   slicer_node
+  bag_to_text
   DESTINATION lib/${PROJECT_NAME}/)
 
 # install launch files

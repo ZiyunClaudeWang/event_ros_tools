@@ -1,5 +1,5 @@
 <launch>
-  <arg name="event_topic" default="/metavision_driver/events"/>
+  <arg name="event_topic" default="/event_camera/events"/>
   <node pkg="nodelet" type="nodelet"
     name="flicker_nodelet" args="standalone event_ros_tools/FlickerNodelet"
     clear_params="true" output="screen">
@@ -7,7 +7,7 @@
     <param name="avoid_tearing" value="false"/>
     <param name="lead_time" value="0.002"/>
     <param name="duration" value="0.005"/>
-    <param name="message_type" value="dvs"/>
+    <param name="message_type" value="event_array"/>
     <param name="statistics_print_interval" value="1.0"/>
     <!-- remap the events topic -->
     <remap from="~events" to="$(arg event_topic)"/>

@@ -13,10 +13,10 @@
     <param name="slice_time" value="$(arg slice_time)"/>
     <param name="mode" value="ignore_polarities_inv"/>
     <param name="statistics_print_interval" value="1.0"/>
-    <!-- what kind of messages to subscribe to (dvs or prophesee) -->
-    <param name="message_type" value="dvs"/>
+    <!-- what kind of messages to subscribe to (dvs, prophesee, event_array) -->
+    <param name="message_type" value="event_array"/>
     <!-- remap the events topic -->
-    <remap from="~events" to="/metavision_driver/events"/>
+    <remap from="~events" to="/event_camera/events"/>
   </node>
 
   <!-- driver nodelet -->
@@ -31,8 +31,8 @@
     <param name="bias_file" value="$(arg bias_file)"/>
     <!-- run in multithreaded mode -->
     <param name="use_multithreading" value="true"/>
-    <!-- what kind of messages to write (dvs or prophesee) -->
-    <param name="message_type" value="dvs"/>
+    <!-- what kind of messages to write (dvs, prophesee, event_array) -->
+    <param name="message_type" value="event_array"/>
   </node>
 
 </launch>

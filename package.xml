@@ -28,7 +28,7 @@
   <!-- common ROS1/ROS2 dependencies -->
   <depend>dvs_msgs</depend>
   <depend>prophesee_event_msgs</depend>
-  <depend>event_array2_msgs</depend>  
+  <depend>event_array_msgs</depend>  
   <depend>image_transport</depend>
   <depend>cv_bridge</depend>
 

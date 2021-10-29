@@ -14,13 +14,14 @@
 // limitations under the License.
 
 #include <dvs_msgs/EventArray.h>
+#include <event_array_msgs/EventArray.h>
 #include <nodelet/nodelet.h>
 #include <prophesee_event_msgs/EventArray.h>
 #include <ros/ros.h>
 
 #include <memory>
 
-#include "event_ros_tools/flicker.h"
+#include "event_ros_tools/flicker_ros1.h"
 
 namespace event_ros_tools
 {
@@ -46,6 +47,8 @@ public:
       prophFlicker_ = initFlicker<prophesee_event_msgs::EventArray>(nh_);
     } else if (msg_mode == "dvs") {
       dvsFlicker_ = initFlicker<dvs_msgs::EventArray>(nh_);
+    } else if (msg_mode == "event_array") {
+      eventFlicker_ = initFlicker<event_array_msgs::EventArray>(nh_);
     } else {
       ROS_ERROR_STREAM("exiting due to invalid message mode: " << msg_mode);
     }
@@ -55,6 +58,7 @@ private:
   // ------ variables --------
   std::shared_ptr<event_ros_tools::Flicker<prophesee_event_msgs::EventArray>> prophFlicker_;
   std::shared_ptr<event_ros_tools::Flicker<dvs_msgs::EventArray>> dvsFlicker_;
+  std::shared_ptr<event_ros_tools::Flicker<event_array_msgs::EventArray>> eventFlicker_;
   ros::NodeHandle nh_;
 };
 }  // namespace event_ros_tools

@@ -17,7 +17,7 @@
 #define EVENT_ROS_TOOLS__EVENT_SUBSCRIBER_ROS2_H_
 
 #include <dvs_msgs/msg/event_array.hpp>
-#include <event_array2_msgs/msg/event_array2.hpp>
+#include <event_array_msgs/msg/event_array.hpp>
 #include <prophesee_event_msgs/msg/event_array.hpp>
 #include <rclcpp/rclcpp.hpp>
 
@@ -40,23 +40,22 @@ private:
   using DvsEventArrayConstPtr = DvsEventArray::ConstSharedPtr;
   using ProEventArray = prophesee_event_msgs::msg::EventArray;
   using ProEventArrayConstPtr = ProEventArray::ConstSharedPtr;
-  using EventArray2 = event_array2_msgs::msg::EventArray2;
-  using EventArray2ConstPtr = EventArray2::ConstSharedPtr;
+  using EventArray = event_array_msgs::msg::EventArray;
+  using EventArrayConstPtr = EventArray::ConstSharedPtr;
 
   bool initialize();
   void callbackEventsDvs(DvsEventArrayConstPtr events);
   void callbackEventsPro(ProEventArrayConstPtr events);
-  void callbackEvents2(EventArray2ConstPtr events);
+  void callbackEvents(EventArrayConstPtr events);
 
   // ------ variables
   rclcpp::Node * node_;
   EventProcessor * eventProcessor_;
   rclcpp::Subscription<DvsEventArray>::SharedPtr dvsSub_;
   rclcpp::Subscription<ProEventArray>::SharedPtr proSub_;
-  rclcpp::Subscription<EventArray2>::SharedPtr array2Sub_;
+  rclcpp::Subscription<EventArray>::SharedPtr eventSub_;
   std::string topic_;
   std::string msgType_;
-  bool firstCallback_{true};
 };
 }  // namespace event_ros_tools
 #endif  // EVENT_ROS_TOOLS__EVENT_SUBSCRIBER_ROS2_H_

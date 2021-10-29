@@ -25,7 +25,7 @@ find_package(ament_cmake_auto REQUIRED)
 set(ROS2_DEPENDENCIES
   "dvs_msgs"
   "prophesee_event_msgs"
-  "event_array2_msgs"
+  "event_array_msgs"
   "rclcpp"
   "rclcpp_components"
   "rosbag2_cpp"

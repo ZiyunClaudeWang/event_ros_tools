@@ -1,9 +1,14 @@
 <launch>
-  <arg name="event_topic" default="/metavision_driver/events"/>
+  <arg name="event_topic" default="/event_camera/events"/>
   <node pkg="event_ros_tools" type="flicker_node" name="flicker" clear_params="true"
 	output="screen">
     <!-- what kind of messages to subscribe to (dvs or prophesee) -->
-    <param name="message_type" value="dvs"/>
+    <param name="message_type" value="event_array"/>
+    <param name="avoid_tearing" value="true"/>
+    <param name="lead_time" value="0.002"/>
+    <param name="duration" value="0.005"/>
+    <param name="use_on_events" value="true"/>
+    <param name="message_type" value="event_array"/>
     <param name="statistics_print_interval" value="1.0"/>
     <remap from="~image" to="/flicker/image"/>
     <!-- remap the events topic -->

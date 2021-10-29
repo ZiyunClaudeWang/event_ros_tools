@@ -50,7 +50,7 @@ bool Slicer::initialize()
   }
   sliceTime_ = static_cast<uint64_t>((std::abs(nh_.param<double>("slice_time", 0.025) * 1e9)));
 
-  const std::string msgType = nh_.param<std::string>("msg_type", "event_array2");
+  const std::string msgType = nh_.param<std::string>("message_type", "event_array");
   statistics_.setPrintInterval(
     static_cast<uint64_t>(std::fabs(nh_.param<double>("statistics_print_interval", 2.0) * 1e9)));
   eventSubscriber_.reset(new EventSubscriber(nh_, this, "events", msgType));
@@ -58,15 +58,16 @@ bool Slicer::initialize()
   return (true);
 }
 
-void Slicer::imageSize(uint32_t width, uint32_t height)
+void Slicer::messageStart(const std_msgs::Header & header, uint32_t width, uint32_t height)
 {
+  (void)header;
   imageUpdater_->resetImage(width, height);
 }
 
 void Slicer::messageComplete(
   const std_msgs::Header & header, uint64_t endTime, uint64_t seq, size_t numEvents)
 {
-  uint64_t t_msg = ros::Time(header.stamp).toNSec();
+  const uint64_t t_msg = ros::Time(header.stamp).toNSec();
 
   if (lastTime_ > t_msg) {  // time must have gone backwards, restart
     lastTime_ = t_msg;

@@ -7,7 +7,7 @@ add_compile_definitions(USING_ROS_1)
 find_package(catkin REQUIRED COMPONENTS
   dvs_msgs
   prophesee_event_msgs
-  event_array2_msgs
+  event_array_msgs
   roscpp
   nodelet
   rosbag
@@ -58,16 +58,16 @@ target_link_libraries(slicer_node slicer ${OpenCV_LIBS} ${catkin_LIBRARIES})
 # --------- flicker framer ------------
 #
 # nodelet
-add_library(flicker_nodelet src/flicker_nodelet.cpp)
+add_library(flicker_nodelet src/event_subscriber_ros1.cpp src/statistics.cpp src/flicker_nodelet.cpp)
 target_link_libraries(flicker_nodelet ${OpenCV_LIBS} ${catkin_LIBRARIES})
 # node
-add_executable(flicker_node src/flicker_node.cpp)
+add_executable(flicker_node src/event_subscriber_ros1.cpp src/statistics.cpp src/flicker_node.cpp)
 target_link_libraries(flicker_node ${OPENCV_LIBS} ${catkin_LIBRARIES})
 
 #
 # --------- bag to text converter -----
 #
-add_executable(bag_to_text src/bag_to_text.cpp)
+add_executable(bag_to_text src/bag_to_text_ros1.cpp)
 target_link_libraries(bag_to_text ${catkin_LIBRARIES})
 
 

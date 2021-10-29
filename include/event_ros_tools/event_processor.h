@@ -33,9 +33,9 @@ public:
   typedef std_msgs::msg::Header Header;
 #endif
   virtual ~EventProcessor() {}
+  virtual void messageStart(const Header & header, uint32_t width, uint32_t height) = 0;
   virtual void messageComplete(
     const Header & header, uint64_t endTime, uint64_t seq, size_t numEvents) = 0;
-  virtual void imageSize(uint32_t width, uint32_t height) = 0;
   virtual void event(uint64_t t, uint16_t x, uint16_t y, bool p) = 0;
 };
 }  // namespace event_ros_tools

@@ -4,11 +4,11 @@
   <!-- flicker node -->
   <node pkg="event_ros_tools" type="flicker_node" name="flicker"
 	clear_params="true" output="screen">
-    <param name="message_type" value="dvs"/>
+    <param name="message_type" value="event_array"/>
     <param name="statistics_print_interval" value="1.0"/>
     <remap from="~image" to="/flicker/image"/>
     <!-- remap the events topic -->
-    <remap from="~events" to="/metavision_driver/events"/>
+    <remap from="~events" to="/event_camera/events"/>
   </node>
 
   <!-- driver node -->

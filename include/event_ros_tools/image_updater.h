@@ -34,6 +34,7 @@ public:
   }
   virtual void resetImage() { image_ = cv::Mat::zeros(image_.rows, image_.cols, CV_32SC1); }
   const cv::Mat & getImage() const { return (image_); }
+  bool hasValidImage() const { return (image_.rows > 0); }
 
   // factory method to create image updaters. allowed values for mode are:
   //

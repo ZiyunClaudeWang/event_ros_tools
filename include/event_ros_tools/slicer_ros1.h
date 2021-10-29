@@ -34,9 +34,9 @@ public:
   explicit Slicer(const ros::NodeHandle & nh);
   ~Slicer();
 
+  void messageStart(const std_msgs::Header & header, uint32_t width, uint32_t height) override;
   void messageComplete(
     const std_msgs::Header & header, uint64_t endTime, uint64_t seq, size_t numEvents) override;
-  void imageSize(uint32_t width, uint32_t height) override;
   void event(uint64_t t, uint16_t x, uint16_t y, bool p) override
   {
     imageUpdater_->update(t, x, y, p);
@@ -47,7 +47,6 @@ public:
 
 private:
   bool initialize();
-  void updateStatistics(uint64_t t_start, uint64_t t_end, size_t numEvents, uint64_t seq);
 
   // ------ variables ----
   ros::NodeHandle nh_;

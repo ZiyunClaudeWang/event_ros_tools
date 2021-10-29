@@ -14,8 +14,8 @@
 // limitations under the License.
 
 #include <dvs_msgs/EventArray.h>
-#include <event_array2_msgs/EventArray2.h>
-#include <event_array2_msgs/decode.h>
+#include <event_array_msgs/EventArray.h>
+#include <event_array_msgs/decode.h>
 #include <prophesee_event_msgs/EventArray.h>
 #include <ros/ros.h>
 #include <rosbag/bag.h>
@@ -24,8 +24,6 @@
 
 #include <chrono>
 #include <fstream>
-
-using std::chrono;
 
 void usage()
 {
@@ -55,27 +53,34 @@ size_t write_events(
 }
 
 template <>
-size_t write_events<event_array2_msgs::EventArray2>(
-  std::ofstream & out, event_array2_msgs::EventArray2::ConstPtr s, int a, int x, int y,
+size_t write_events<event_array_msgs::EventArray>(
+  std::ofstream & out, event_array_msgs::EventArray::ConstPtr s, int a, int x, int y,
   const ros::Time & t0)
 {
+  if (s->encoding != "mono") {
+    std::cerr << "unknown event encoding: " << s->encoding << std::endl;
+    throw std::runtime_error("unknown encoding!");
+  }
+
   const uint64_t time_base = s->time_base;
-  for (const auto e : s->p_y_x_t) {
+  uint8_t const * p = &(s->events[0]);
+  for (size_t i = 0; i < s->events.size(); i += 8, p += 8) {
     uint16_t ex, ey;
     uint64_t etu;
-    bool p = event_array2_msgs::decode_t_x_y_p(e, time_base, &etu, &ex, &ey);
+    bool pol = event_array_msgs::mono::decode_t_x_y_p(p, time_base, &etu, &ex, &ey);
     ros::Time et;
     et.fromNSec(etu);
     if (a < 0) {  // no aperture given
-      out << (et - t0).toSec() << " " << ex << " " << ey << " " << static_cast<int>(p) << std::endl;
+      out << (et - t0).toSec() << " " << ex << " " << ey << " " << static_cast<int>(pol)
+          << std::endl;
     } else {
       if (std::abs(ex - x) <= a && std::abs(ey - y) <= a) {
         out << (et - t0).toSec() << " " << (a + ex - x) << " " << (a + ey - y) << " "
-            << static_cast<int>(p) << std::endl;
+            << static_cast<int>(pol) << std::endl;
       }
     }
   }
-  return (s->p_y_x_t.size());
+  return (s->events.size() / 8);
 }
 
 template <typename MsgType>
@@ -156,20 +161,20 @@ int main(int argc, char ** argv)
   rosbag::View view(bag, rosbag::TopicQuery(topics));
   std::ofstream out(outFile);
   // Get ending timepoint
-  auto start = high_resolution_clock::now();
+  auto start = std::chrono::high_resolution_clock::now();
   size_t numEvents = 0;
   if (messageType == "prophesee") {
     numEvents += process_bag<prophesee_event_msgs::EventArray>(view, out, aperture, x, y);
   } else if (messageType == "dvs") {
     numEvents += process_bag<dvs_msgs::EventArray>(view, out, aperture, x, y);
-  } else if (messageType == "event_array2") {
-    numEvents += process_bag<event_array2_msgs::EventArray2>(view, out, aperture, x, y);
+  } else if (messageType == "event_array") {
+    numEvents += process_bag<event_array_msgs::EventArray>(view, out, aperture, x, y);
   } else {
     std::cout << "invalid message type: " << messageType << std::endl;
     return (-1);
   }
-  auto final = high_resolution_clock::now();
-  auto total_duration = duration_cast<microseconds>(final - start);
+  auto final = std::chrono::high_resolution_clock::now();
+  auto total_duration = std::chrono::duration_cast<std::chrono::microseconds>(final - start);
 
   std::cout << "number of events read: " << numEvents * 1e-6 << " Mev in "
             << total_duration.count() * 1e-6 << " seconds" << std::endl;

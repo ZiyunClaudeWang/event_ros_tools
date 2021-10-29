@@ -60,7 +60,7 @@ bool Slicer::initialize()
   sliceTime_ =
     static_cast<uint64_t>((std::abs(declare_parameter<double>("slice_time", 0.025) * 1e9)));
 
-  const std::string msgType = declare_parameter<std::string>("msg_type", "event_array2");
+  const std::string msgType = declare_parameter<std::string>("message_type", "event_array");
   statistics_.setPrintInterval(static_cast<uint64_t>(
     std::fabs(declare_parameter<double>("statistics_print_interval", 2.0) * 1e9)));
   eventSubscriber_.reset(new EventSubscriber(this, this, "~/events", msgType));
@@ -68,9 +68,12 @@ bool Slicer::initialize()
   return (true);
 }
 
-void Slicer::imageSize(uint32_t width, uint32_t height)
+void Slicer::messageStart(const std_msgs::msg::Header & header, uint32_t width, uint32_t height)
 {
-  imageUpdater_->resetImage(width, height);
+  (void)header;
+  if (!imageUpdater_->hasValidImage()) {
+    imageUpdater_->resetImage(width, height);
+  }
 }
 
 void Slicer::messageComplete(

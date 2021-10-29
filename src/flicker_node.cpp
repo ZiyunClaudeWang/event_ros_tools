@@ -14,10 +14,11 @@
 // limitations under the License.
 
 #include <dvs_msgs/EventArray.h>
+#include <event_array_msgs/EventArray.h>
 #include <prophesee_event_msgs/EventArray.h>
 #include <ros/ros.h>
 
-#include "event_ros_tools/flicker.h"
+#include "event_ros_tools/flicker_ros1.h"
 
 template <class T>
 void run_node(ros::NodeHandle & pnh)
@@ -42,6 +43,8 @@ int main(int argc, char ** argv)
       run_node<prophesee_event_msgs::EventArray>(pnh);
     } else if (msg_mode == "dvs") {
       run_node<dvs_msgs::EventArray>(pnh);
+    } else if (msg_mode == "event_array") {
+      run_node<event_array_msgs::EventArray>(pnh);
     } else {
       ROS_ERROR_STREAM("exiting due to invalid message mode: " << msg_mode);
     }

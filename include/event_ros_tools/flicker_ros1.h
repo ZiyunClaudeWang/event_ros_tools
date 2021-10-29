@@ -13,8 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef EVENT_ROS_TOOLS__FLICKER_H_
-#define EVENT_ROS_TOOLS__FLICKER_H_
+#ifndef EVENT_ROS_TOOLS__FLICKER_ROS1_H_
+#define EVENT_ROS_TOOLS__FLICKER_ROS1_H_
 
 // #define DEBUG
 // #define DEBUG_FROM_ZERO
@@ -36,7 +36,10 @@
 #include <thread>
 
 #include "event_ros_tools/FlickerDynConfig.h"
+#include "event_ros_tools/event_processor.h"
+#include "event_ros_tools/event_subscriber_ros1.h"
 #include "event_ros_tools/stamped_image.h"
+#include "event_ros_tools/statistics.h"
 
 #ifdef DEBUG
 #include <fstream>
@@ -45,25 +48,127 @@
 namespace event_ros_tools
 {
 template <class MsgType>
-class Flicker
+class Flicker : public EventProcessor
 {
 public:
   using Config = FlickerDynConfig;
 
-  explicit Flicker(const ros::NodeHandle & nh) : nh_(nh)
+  explicit Flicker(const ros::NodeHandle & nh) : statistics_("slicer"), nh_(nh)
   {
 #ifdef DEBUG
-    rateDebugFile_.open("rate_debug_file.txt");
-    intDebugFile_[0].open("int_debug_OFF.txt");
-    intDebugFile_[1].open("int_debug_ON.txt");
+    rateDebugFile_.open("rate_debug.txt");
+    intDebugFile_.open("int_debug.txt");
     winDebugFile_[0].open("win_debug_OFF.txt");
     winDebugFile_[1].open("win_debug_ON.txt");
     highLowDebugFile_[0].open("high_low_OFF.txt");
     highLowDebugFile_[1].open("high_low_ON.txt");
     tearingFile_.open("tearing.txt");
 #endif
+    lastBinTime_ = ros::Time(0);
   }
   ~Flicker() { shutdown(); }
+  // -------- from the EventProcessor interface
+  void messageStart(const std_msgs::Header & header, uint32_t width, uint32_t height) override
+  {
+#ifdef DEBUG
+    y_min_ = height;
+    y_max_ = -1;
+#endif
+    if (lastBinTime_ == ros::Time(0)) {
+      for (int i = 0; i < 2; i++) {
+        highTime_[i] = header.stamp;
+        timeWindowStart_[i] = timeWindowEnd_[i] = header.stamp;
+      }
+
+      lastBinTime_ = header.stamp;
+#ifdef DEBUG
+#ifdef DEBUG_FROM_ZERO
+      startTime_ = ros::Time(0);
+#else
+      startTime_ = header.stamp;
+#endif
+#endif
+      resetImage(width, height);
+      ROS_INFO_STREAM("image has size " << width << " x " << height);
+    }
+  }
+
+  void messageComplete(
+    const std_msgs::Header & header, uint64_t endTime, uint64_t seq, size_t numEvents) override
+  {
+    const uint64_t t_msg = ros::Time(header.stamp).toNSec();
+
+    if (numEvents != 0) {
+      statistics_.update(t_msg, endTime, numEvents, seq);
+    }
+
+    if (imagePub_.getNumSubscribers() != 0) {
+      if (imageComplete_) {
+        std::unique_lock<std::mutex> lock(mutex_);
+        imageQueue_.push_front(StampedImage(stamp_, image_));
+        cv_.notify_all();
+        resetImage(image_->cols, image_->rows);
+        imageComplete_ = false;
+      }
+    }
+#ifdef DEBUG
+    const auto msgTime = header.stamp;
+    if (y_max_ > -1) {
+      tearingFile_ << (msgTime - startTime_) << " " << y_min_ << " " << y_max_ << std::endl;
+    }
+    intDebugFile_ << (msgTime - startTime_) << " "
+                  << (timeWindowStart_[integrateEventType_] - startTime_) << " "
+                  << (timeWindowEnd_[integrateEventType_] - startTime_) << " "
+                  << (int)isIntegrating_ << " " << (int)keepIntegrating_ << " "
+                  << (int)imageComplete_ << std::endl;
+#endif
+  }
+  void event(uint64_t t_nsec, uint16_t x, uint16_t y, bool polarity) override
+  {
+    ros::Time t;
+    t.fromNSec(t_nsec);
+    while (t > lastBinTime_ + binDuration_) {
+      lastBinTime_ += binDuration_;
+      // t has crossed into new time bin, process old one
+      // update rate estimate and maintain integration window
+      updateRate(t);
+    }
+    const int p = (int)polarity;
+    eventCount_[p]++;
+    if (p == integrateEventType_ && periodEstablished_) {
+      if (keepIntegrating_) {
+        // special mode: we are currently integrating beyond time window
+        integrateIntoImage((int)x, (int)y);
+        if ((int)y > image_->rows - 2) {  // event from bottom of image,
+          keepIntegrating_ = false;       // "frame" is complete, stop it.
+          imageComplete_ = true;          // done with image.
+          isIntegrating_ = false;
+          stamp_ = t;
+        }
+      } else {
+        // regular mode: we are not integrating beyond time window
+        if (t > timeWindowStart_[p]) {
+          if (t < timeWindowEnd_[p]) {
+            // t is inside integration window
+            if (!isIntegrating_) {
+              isIntegrating_ = true;
+            }
+            integrateIntoImage((int)x, (int)y);
+          } else {  // t is beyond integration window
+            if (isIntegrating_) {
+              if (avoidTearing_) {
+                keepIntegrating_ = true;
+              } else {
+                isIntegrating_ = false;
+                imageComplete_ = true;
+                stamp_ = t;
+              }
+            }
+          }
+        }
+      }
+    }  // period is established
+  }    // end of event() callback
 
   void shutdown()
   {
@@ -76,6 +181,7 @@ public:
       thread_->join();
       thread_.reset();
     }
+    eventSubscriber_->stop();
   }
 
   bool initialize()
@@ -94,19 +200,22 @@ public:
 
     image_transport::ImageTransport it(nh_);
     imagePub_ = it.advertise("image", 1);
-    double printInterval;
-    nh_.param<double>("statistics_print_interval", printInterval, 1.0);
-    printInterval_ = ros::Duration(printInterval);
+    double pi;
+    nh_.param<double>("statistics_print_interval", pi, 1.0);
+    statistics_.setPrintInterval(static_cast<uint64_t>(pi * 1e9));
+
     for (int i = 0; i < 2; i++) {
       eventCount_[i] = 0;
       rate_[i] = 1e3;  // assume 1kev rate to start
-      rateCov_[i] = 0;
+      rateCov_[i] = rate_[i] * rate_[i];
       dt_ = 0;
       isHigh_[i] = false;
     }
     // NOTE: must wait with subscribing until init is complete!
-    int qs = nh_.param<int>("event_queue_size", 1000);
-    sub_ = nh_.subscribe("events", qs, &Flicker::eventCallback, this);
+    const std::string msgType = nh_.param<std::string>("message_type", "event_array");
+    eventSubscriber_.reset(new EventSubscriber(nh_, this, "events", msgType));
+    eventSubscriber_->start();
+
     ROS_INFO_STREAM("flicker initialized!");
     return (true);
   }
@@ -125,37 +234,8 @@ private:
       duration_[i] = ros::Duration(config.duration);
     }
     avoidTearing_ = config.avoid_tearing;
+    std::cout << "USE ON OEVENTS: " << (int)config.use_on_events << std::endl;
     integrateEventType_ = config.use_on_events ? 1 : 0;
-  }
-
-  void updateStatistics(const MsgType & msg)
-  {
-    const ros::Time & t_start = msg.events.begin()->ts;
-    const ros::Time & t_end = msg.events.rbegin()->ts;
-    const float dt = (float)(t_end - t_start).toSec();
-    const float dt_inv = dt != 0 ? (1.0 / dt) : 0;
-    const float rate = msg.events.size() * dt_inv * 1e-6;
-    dropped_ += msg.header.seq - lastSequence_ - 1;
-    maxRate_ = std::max(rate, maxRate_);
-    totalEvents_ += msg.events.size();
-    totalTime_ += dt;
-    totalMsgs_++;
-    lastSequence_ = msg.header.seq;
-    if (t_end > lastPrintTime_ + printInterval_) {
-      const float avgRate = 1e-6 * totalEvents_ * (totalTime_ > 0 ? 1.0 / totalTime_ : 0);
-      const float avgSize = totalEvents_ / (float)totalMsgs_;
-      ROS_INFO(
-        "rcv msg sz: %4d ev,  rt[Mevs] avg: %7.3f, max: %7.3f, "
-        "drop: %3d, qs: %2zu, dT: %5.3f",
-        (int)avgSize, avgRate, maxRate_, dropped_, maxQueueSize_, dt_);
-      maxRate_ = 0;
-      lastPrintTime_ += printInterval_;
-      totalEvents_ = 0;
-      totalMsgs_ = 0;
-      totalTime_ = 0;
-      dropped_ = 0;
-      maxQueueSize_ = 0;
-    }
   }
 
   void imageProcessingThread()
@@ -163,14 +243,12 @@ private:
     const std::chrono::microseconds timeout((int64_t)(1000000LL));
     while (ros::ok() && keepRunning_) {
       StampedImage si(ros::Time(0), std::shared_ptr<cv::Mat>());
-      size_t qs = 0;
       {  // critical section, no processing done here
         std::unique_lock<std::mutex> lock(mutex_);
         while (ros::ok() && keepRunning_ && imageQueue_.empty()) {
           cv_.wait_for(lock, timeout);
         }
         if (!imageQueue_.empty()) {
-          qs = imageQueue_.size();
           si = imageQueue_.back();
           imageQueue_.pop_back();
         }
@@ -179,48 +257,9 @@ private:
         header_.seq++;
         header_.stamp = si.time;
         publishImage(header_, si.image);
-        maxQueueSize_ = std::max(maxQueueSize_, qs);
       }
     }
     ROS_INFO("publishing thread exited!");
-  }
-
-  void eventCallback(const MsgType & msg)
-  {
-    if (msg.events.empty()) {
-      return;
-    }
-    if (!image_) {
-      resetImage(msg.width, msg.height);
-      ROS_INFO_STREAM("image has size " << msg.width << " x " << msg.height);
-      header_ = msg.header;
-      lastSequence_ = msg.header.seq;
-      lastPrintTime_ = msg.header.stamp;
-      lastBinTime_ = msg.header.stamp;
-#ifdef DEBUG
-#ifdef DEBUG_FROM_ZERO
-      startTime_ = ros::Time(0);
-#else
-      startTime_ = msg.header.stamp;
-#endif
-#endif
-      for (int i = 0; i < 2; i++) {
-        highTime_[i] = msg.header.stamp;
-        timeWindowStart_[i] = timeWindowEnd_[i] = msg.header.stamp;
-      }
-    }
-    updateStatistics(msg);
-    if (imagePub_.getNumSubscribers() != 0) {
-      ros::Time stamp;
-      if (updateImage(msg, &stamp)) {
-        {
-          std::unique_lock<std::mutex> lock(mutex_);
-          imageQueue_.push_front(StampedImage(stamp, image_));
-          cv_.notify_all();
-        }
-        resetImage(image_->cols, image_->rows);
-      }
-    }
   }
 
   void publishImage(const std_msgs::Header & header, const std::shared_ptr<cv::Mat> & image)
@@ -360,81 +399,7 @@ private:
 #endif
   }
 
-  bool updateImage(const MsgType & msg, ros::Time * stamp)
-  {
-#ifdef DEBUG
-    y_min_ = msg.height;
-    y_max_ = -1;
-#endif
-    const int EVENT_TYPE_TO_USE = integrateEventType_;
-    bool imageComplete(false);
-    for (const auto & ev : msg.events) {
-      const auto t = ev.ts;
-      while (t > lastBinTime_ + binDuration_) {
-        lastBinTime_ += binDuration_;
-        // t has crossed into new time bin, process old one
-        // update rate estimate and maintain integration window
-        updateRate(t);
-      }
-      const int p = (int)ev.polarity;
-      eventCount_[p]++;
-      if (p != EVENT_TYPE_TO_USE || !periodEstablished_) {
-        continue;
-      }
-      if (keepIntegrating_) {  // currently integrating beyond time window
-        integrateIntoImage((int)ev.x, (int)ev.y);
-        if ((int)ev.y > msg.height - 2) {  // event from bottom of image,
-          keepIntegrating_ = false;        // "frame" is complete, stop it.
-          imageComplete = true;            // done with image.
-          isIntegrating_ = false;
-          *stamp = t;
-        }
-        continue;
-      }
-      if (t > timeWindowStart_[p]) {
-        if (t < timeWindowEnd_[p]) {  // t is inside integration window
-          if (!isIntegrating_) {
-            isIntegrating_ = true;
-          }
-          integrateIntoImage((int)ev.x, (int)ev.y);
-        } else {  // t is beyond integration window
-          if (isIntegrating_) {
-            if (avoidTearing_) {
-              keepIntegrating_ = true;
-            } else {
-              isIntegrating_ = false;
-              imageComplete = true;
-              *stamp = t;
-            }
-          }
-        }
-      }
-    }  // loop over events
-#ifdef DEBUG
-    const auto msgTime = msg.header.stamp;
-    if (y_min_ < (int)msg.height && y_max_ > -1) {
-      tearingFile_ << (msgTime - startTime_) << " " << y_min_ << " " << y_max_ << std::endl;
-    }
-    intDebugFile_[0] << (msgTime - startTime_) << " "
-                     << (timeWindowStart_[EVENT_TYPE_TO_USE] - startTime_) << " "
-                     << (timeWindowEnd_[EVENT_TYPE_TO_USE] - startTime_) << " "
-                     << (int)isIntegrating_ << " " << (int)keepIntegrating_ << " "
-                     << (int)imageComplete << std::endl;
-#endif
-    return (imageComplete);
-  }
-
   // ------- variables
-  // -- related to statistics
-  ros::Duration printInterval_{1.0};  // time between statistics logging
-  float maxRate_{0};                  // maximum total ON+OFF event rate
-  uint64_t totalEvents_{0};           // total events during stats interval
-  float totalTime_{0};                // total time during interval
-  uint32_t totalMsgs_{0};             // total msgs received during interval
-  uint32_t dropped_{0};               // number of ROS msg drops detected
-  size_t maxQueueSize_{0};            // maximum output queue size
-  ros::Time lastPrintTime_{0};
-  uint32_t lastSequence_{0};
   // -- related to rate and period computation
   uint32_t warmupBinCount_{0};       // number of time bins to wait for warmup
   uint32_t warmupPeriodCount_{0};    // number of periods to wait for warmup
@@ -462,21 +427,26 @@ private:
   bool keepIntegrating_{false};     // control integration beyond time slice
   bool avoidTearing_{true};         // keep integrating until frame complete
   std::shared_ptr<cv::Mat> image_;  // working image being integrated
+  bool imageComplete_{false};       // if image is complete
+  ros::Time stamp_;                 // timestamp of complete image
   // -- related to multithreading
   std::mutex mutex_;
   std::condition_variable cv_;
   std::deque<StampedImage> imageQueue_;
   std::shared_ptr<std::thread> thread_;
   bool keepRunning_{true};
+  // -- related to statistics
+  Statistics statistics_;
   // -- ROS related stuff
   ros::NodeHandle nh_;
   ros::Subscriber sub_;
   image_transport::Publisher imagePub_;
   std_msgs::Header header_;  // prepared message header
   std::shared_ptr<dynamic_reconfigure::Server<Config>> configServer_;
+  std::shared_ptr<EventSubscriber> eventSubscriber_;
 #ifdef DEBUG
   std::ofstream rateDebugFile_;
-  std::ofstream intDebugFile_[2];
+  std::ofstream intDebugFile_;
   std::ofstream winDebugFile_[2];
   std::ofstream highLowDebugFile_[2];
   std::ofstream tearingFile_;
@@ -486,4 +456,4 @@ private:
 #endif
 };
 }  // namespace event_ros_tools
-#endif  // EVENT_ROS_TOOLS__FLICKER_H_
+#endif  // EVENT_ROS_TOOLS__FLICKER_ROS1_H_

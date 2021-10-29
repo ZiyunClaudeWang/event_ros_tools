@@ -15,7 +15,7 @@
 
 #include "event_ros_tools/event_subscriber_ros1.h"
 
-#include <event_array2_msgs/decode.h>
+#include <event_array_msgs/decode.h>
 
 #include <functional>
 
@@ -45,8 +45,8 @@ void EventSubscriber::start()
     sub_ = nh_.subscribe(topic_, qs, &EventSubscriber::callbackEventsDvs, this);
   } else if (msgType_ == "prophesee") {
     sub_ = nh_.subscribe(topic_, qs, &EventSubscriber::callbackEventsPro, this);
-  } else if (msgType_ == "event_array2") {
-    sub_ = nh_.subscribe(topic_, qs, &EventSubscriber::callbackEvents2, this);
+  } else if (msgType_ == "event_array") {
+    sub_ = nh_.subscribe(topic_, qs, &EventSubscriber::callbackEvents, this);
   } else {
     BOMB_OUT_NODE("bad message type: " << msgType_);
   }
@@ -60,10 +60,7 @@ void EventSubscriber::stop()
 
 void EventSubscriber::callbackEventsDvs(DvsEventArrayConstPtr msg)
 {
-  if (firstCallback_) {
-    eventProcessor_->imageSize(msg->width, msg->height);
-    firstCallback_ = false;
-  }
+  eventProcessor_->messageStart(msg->header, msg->width, msg->height);
   for (const auto & e : msg->events) {
     eventProcessor_->event(ros::Time(e.ts).toNSec(), e.x, e.y, e.polarity);
   }
@@ -74,10 +71,7 @@ void EventSubscriber::callbackEventsDvs(DvsEventArrayConstPtr msg)
 
 void EventSubscriber::callbackEventsPro(ProEventArrayConstPtr msg)
 {
-  if (firstCallback_) {
-    eventProcessor_->imageSize(msg->width, msg->height);
-    firstCallback_ = false;
-  }
+  eventProcessor_->messageStart(msg->header, msg->width, msg->height);
   for (const auto & e : msg->events) {
     eventProcessor_->event(ros::Time(e.ts).toNSec(), e.x, e.y, e.polarity);
   }
@@ -86,21 +80,24 @@ void EventSubscriber::callbackEventsPro(ProEventArrayConstPtr msg)
   eventProcessor_->messageComplete(msg->header, endTime, 0, msg->events.size());
 }
 
-void EventSubscriber::callbackEvents2(EventArray2ConstPtr msg)
+void EventSubscriber::callbackEvents(EventArrayConstPtr msg)
 {
-  if (firstCallback_) {
-    eventProcessor_->imageSize(msg->width, msg->height);
-    firstCallback_ = false;
+  eventProcessor_->messageStart(msg->header, msg->width, msg->height);
+  if (msg->encoding != "mono") {
+    BOMB_OUT_NODE("event message has unknown encoding: " << msg->encoding);
   }
   const auto time_base = msg->time_base;
   uint64_t endTime = ros::Time(msg->header.stamp).toNSec();
-  for (const auto e : msg->p_y_x_t) {
+  const size_t numEvents = msg->events.size() / 8;
+  const uint8_t * p = &msg->events[0];
+  for (size_t i = 0; i < msg->events.size(); i += 8, p += 8) {
     uint64_t t;
     uint16_t x, y;
-    const bool p = event_array2_msgs::decode_t_x_y_p(e, time_base, &t, &x, &y);
-    eventProcessor_->event(t, x, y, p);
+    const bool polarity = event_array_msgs::mono::decode_t_x_y_p(p, time_base, &t, &x, &y);
+    eventProcessor_->event(t, x, y, polarity);
     endTime = t;
   }
-  eventProcessor_->messageComplete(msg->header, endTime, msg->seq, msg->p_y_x_t.size());
+
+  eventProcessor_->messageComplete(msg->header, endTime, msg->seq, numEvents);
 }
 }  // namespace event_ros_tools

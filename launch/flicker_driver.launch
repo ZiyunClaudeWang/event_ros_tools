@@ -9,11 +9,11 @@
   <!-- flicker nodelet -->
   <node pkg="nodelet" type="nodelet" name="flicker_nodelet"
 	args="load event_ros_tools/FlickerNodelet flicker_driver" output="screen">
-    <param name="message_type" value="dvs"/>
+    <param name="message_type" value="event_array"/>
     <param name="statistics_print_interval" value="1.0"/>
     <remap from="~image" to="/flicker/image"/>
     <!-- remap the events topic -->
-    <remap from="~events" to="/metavision_driver/events"/>
+    <remap from="~events" to="/event_camera/events"/>
   </node>
 
   <!-- driver nodelet -->
@@ -28,7 +28,7 @@
     <param name="bias_file" value="$(arg bias_file)"/>
     <!-- run in multithreaded mode -->
     <param name="use_multithreading" value="true"/>
-    <!-- what kind of messages to write (dvs or prophesee) -->
-    <param name="message_type" value="dvs"/>
+    <!-- what kind of messages to write (dvs, prophesee, event_array) -->
+    <param name="message_type" value="event_array"/>
   </node>
 </launch>

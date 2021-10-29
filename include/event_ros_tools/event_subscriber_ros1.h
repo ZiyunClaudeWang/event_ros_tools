@@ -17,7 +17,7 @@
 #define EVENT_ROS_TOOLS__EVENT_SUBSCRIBER_ROS1_H_
 
 #include <dvs_msgs/EventArray.h>
-#include <event_array2_msgs/EventArray2.h>
+#include <event_array_msgs/EventArray.h>
 #include <prophesee_event_msgs/EventArray.h>
 #include <ros/ros.h>
 
@@ -42,13 +42,13 @@ private:
   using DvsEventArrayConstPtr = DvsEventArray::Ptr;
   using ProEventArray = prophesee_event_msgs::EventArray;
   using ProEventArrayConstPtr = ProEventArray::Ptr;
-  using EventArray2 = event_array2_msgs::EventArray2;
-  using EventArray2ConstPtr = EventArray2::Ptr;
+  using EventArray = event_array_msgs::EventArray;
+  using EventArrayConstPtr = EventArray::Ptr;
 
   bool initialize();
   void callbackEventsDvs(DvsEventArrayConstPtr events);
   void callbackEventsPro(ProEventArrayConstPtr events);
-  void callbackEvents2(EventArray2ConstPtr events);
+  void callbackEvents(EventArrayConstPtr events);
 
   // ------ variables
   ros::NodeHandle nh_;
@@ -57,7 +57,6 @@ private:
   std::string topic_;
   std::string msgType_;
   bool running_{false};
-  bool firstCallback_{true};
 };
 }  // namespace event_ros_tools
 #endif  // EVENT_ROS_TOOLS__EVENT_SUBSCRIBER_ROS1_H_

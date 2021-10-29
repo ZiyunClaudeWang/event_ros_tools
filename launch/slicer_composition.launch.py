@@ -40,7 +40,7 @@ def launch_setup(context, *args, **kwargs):
                     plugin='event_ros_tools::Slicer',
                     name='slicer',
                     parameters=[
-                        {'message_type': 'event_array2',
+                        {'message_type': 'event_array',
                          'statistics_print_interval': 2.0,
                          'frame_id': '',
                          'slice_time': 0.03,

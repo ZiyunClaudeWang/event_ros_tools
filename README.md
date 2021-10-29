@@ -47,10 +47,10 @@ Parameters:
 
 - ``slice_time`` time slice of events [seconds] to aggregate into image.
 - ``event_queue_size`` ROS receive event queue message size.
+- ``message_type`` the message type (dvs, prophesee, event_array)
 - ``mode`` (currently must be "ignore_polarities_inv")
 - ``statistics_print_interval`` time in seconds between statistics
-  printing
-
+    printing
 
 Topics:
 - ``events`` (subscribes) camera events

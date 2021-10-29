@@ -13,12 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <event_array2_msgs/decode.h>
+#include <event_array_msgs/decode.h>
 #include <unistd.h>
 
 #include <chrono>
 #include <dvs_msgs/msg/event_array.hpp>
-#include <event_array2_msgs/msg/event_array2.hpp>
+#include <event_array_msgs/msg/event_array.hpp>
 #include <fstream>
 #include <iostream>
 #include <prophesee_event_msgs/msg/event_array.hpp>
@@ -56,28 +56,35 @@ size_t write_event(
 }
 
 template <>
-size_t write_event<event_array2_msgs::msg::EventArray2>(
-  std::ofstream & out, const event_array2_msgs::msg::EventArray2 & s, int a, int x, int y,
+size_t write_event<event_array_msgs::msg::EventArray>(
+  std::ofstream & out, const event_array_msgs::msg::EventArray & s, int a, int x, int y,
   const rclcpp::Time & t0)
 {
+  if (s.encoding != "mono") {
+    std::cerr << "unknown event encoding: " << s.encoding << std::endl;
+    throw std::runtime_error("unknown encoding!");
+  }
+
   const uint64_t time_base = s.time_base;
-  for (const auto e : s.p_y_x_t) {
+  uint8_t const * p = &(s.events[0]);
+  for (size_t i = 0; i < s.events.size(); i += 8, p += 8) {
     uint16_t ex, ey;
     uint64_t etu;
-    bool p = event_array2_msgs::decode_t_x_y_p(e, time_base, &etu, &ex, &ey);
+    bool pol = event_array_msgs::mono::decode_t_x_y_p(p, time_base, &etu, &ex, &ey);
     rclcpp::Time et(etu, t0.get_clock_type());
 
     const double dt = (et - t0).seconds();
     if (a <= 0) {  // no aperture given
-      out << dt << " " << ex << " " << ey << " " << static_cast<int>(p) << std::endl;
+      out << dt << " " << ex << " " << ey << " " << static_cast<int>(pol) << std::endl;
     } else {
       if (std::abs(ex - x) <= a && std::abs(ey - y) <= a) {
-        out << dt << " " << (a + ex - x) << " " << (a + ey - y) << " " << static_cast<int>(p)
+        out << dt << " " << (a + ex - x) << " " << (a + ey - y) << " " << static_cast<int>(pol)
             << std::endl;
       }
     }
   }
-  return (s.p_y_x_t.size());
+  const size_t numEvents = s.events.size() / 8;
+  return (numEvents);
 }
 
 template <class MsgType>
@@ -124,7 +131,7 @@ int main(int argc, char ** argv)
   std::string inFile;
   std::string outFile;
   std::string topic("/event_camera/events");
-  std::string messageType("event_array2");
+  std::string messageType("event_array");
   int aperture(-1);
   int x(-1), y(-1);
   while ((opt = getopt(argc, argv, "i:o:t:m:a:x:y:")) != -1) {
@@ -169,9 +176,9 @@ int main(int argc, char ** argv)
   } else if (messageType == "prophesee") {
     numEvents +=
       translate_bag<prophesee_event_msgs::msg::EventArray>(inFile, outFile, topic, aperture, x, y);
-  } else if (messageType == "event_array2") {
+  } else if (messageType == "event_array") {
     numEvents +=
-      translate_bag<event_array2_msgs::msg::EventArray2>(inFile, outFile, topic, aperture, x, y);
+      translate_bag<event_array_msgs::msg::EventArray>(inFile, outFile, topic, aperture, x, y);
   } else {
     std::cout << "invalid message type: " << messageType << std::endl;
   }

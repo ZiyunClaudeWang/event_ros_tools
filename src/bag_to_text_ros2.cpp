@@ -20,6 +20,7 @@
 #include <dvs_msgs/msg/event_array.hpp>
 #include <event_array_msgs/msg/event_array.hpp>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <prophesee_event_msgs/msg/event_array.hpp>
 #include <rclcpp/rclcpp.hpp>
@@ -37,6 +38,16 @@ void usage()
             << std::endl;
 }
 
+static std::ostream & write_ts(std::ostream & os, double t)
+{
+  const std::ios::fmtflags oldFlags = os.flags();
+  os << std::fixed;
+  os << std::setprecision(6);
+  os << t;
+  os.flags(oldFlags);
+  return (os);
+}
+
 template <typename MsgType>
 size_t write_event(
   std::ofstream & out, const MsgType & s, int a, int x, int y, const rclcpp::Time & t0)
@@ -44,11 +55,12 @@ size_t write_event(
   for (const auto e : s.events) {
     const auto dt = (rclcpp::Time(e.ts) - t0).seconds();
     if (a < 0) {
-      out << dt << " " << e.x << " " << e.y << " " << static_cast<int>(e.polarity) << std::endl;
+      write_ts(out, dt) << " " << e.x << " " << e.y << " " << static_cast<int>(e.polarity)
+                        << std::endl;
     } else {
       if (std::abs(e.x - x) <= a && std::abs(e.y - y) <= a) {
-        out << dt << " " << (a + e.x - x) << " " << (a + e.y - y) << " "
-            << static_cast<int>(e.polarity) << std::endl;
+        write_ts(out, dt) << " " << (a + e.x - x) << " " << (a + e.y - y) << " "
+                          << static_cast<int>(e.polarity) << std::endl;
       }
     }
   }
@@ -75,11 +87,11 @@ size_t write_event<event_array_msgs::msg::EventArray>(
 
     const double dt = (et - t0).seconds();
     if (a <= 0) {  // no aperture given
-      out << dt << " " << ex << " " << ey << " " << static_cast<int>(pol) << std::endl;
+      write_ts(out, dt) << " " << ex << " " << ey << " " << static_cast<int>(pol) << std::endl;
     } else {
       if (std::abs(ex - x) <= a && std::abs(ey - y) <= a) {
-        out << dt << " " << (a + ex - x) << " " << (a + ey - y) << " " << static_cast<int>(pol)
-            << std::endl;
+        write_ts(out, dt) << " " << (a + ex - x) << " " << (a + ey - y) << " "
+                          << static_cast<int>(pol) << std::endl;
       }
     }
   }

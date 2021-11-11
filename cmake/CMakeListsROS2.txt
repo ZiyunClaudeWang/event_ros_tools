@@ -31,11 +31,20 @@ set(ROS2_DEPENDENCIES
   "rosbag2_cpp"
   "image_transport"
   "cv_bridge"
+  "builtin_interfaces"
+  "rosidl_default_generators"
+  "std_msgs"
 )
 
 foreach(pkg ${ROS2_DEPENDENCIES})
   find_package(${pkg} REQUIRED)
 endforeach()
+
+rosidl_generate_interfaces(${PROJECT_NAME}
+  msg_ros2/Rate.msg
+  DEPENDENCIES builtin_interfaces std_msgs
+  ADD_LINTER_TESTS
+  )
 
 ament_auto_find_build_dependencies(REQUIRED ${ROS2_DEPENDENCIES})
 
@@ -53,6 +62,47 @@ rclcpp_components_register_nodes(slicer "event_ros_tools::Slicer")
 ament_auto_add_executable(slicer_node
   src/slicer_node_ros2.cpp)
 
+#
+# ---- rate shared library/component
+#
+ament_auto_add_library(rate SHARED
+  src/event_subscriber_ros2.cpp
+  src/statistics.cpp
+  src/rate_ros2.cpp)
+
+add_dependencies(rate ${PROJECT_NAME})
+
+rclcpp_components_register_nodes(rate "event_ros_tools::Rate")
+
+ament_auto_add_executable(rate_node
+  src/rate_node_ros2.cpp)
+
+#
+# --------
+# this section is necessary to create the
+# dependencies such that the messages are built and found
+#
+
+add_dependencies(rate_node ${PROJECT_NAME})
+
+get_available_rmw_implementations(rmw_implementations2)
+foreach(rmw_implementation ${rmw_implementations2})
+  find_package("${rmw_implementation}" REQUIRED)
+  get_rmw_typesupport(typesupport_impls "${rmw_implementation}" LANGUAGE "cpp")
+  foreach(typesupport_impl ${typesupport_impls})
+    rosidl_target_interfaces(rate
+      ${PROJECT_NAME} ${typesupport_impl}
+    )
+    rosidl_target_interfaces(rate_node
+      ${PROJECT_NAME} ${typesupport_impl}
+    )
+  endforeach()
+endforeach()
+
+# end of dependencies section
+# -------------
+#
+
 # --- bag to text conversion tool
 ament_auto_add_executable(bag_to_text
   src/bag_to_text_ros2.cpp)
@@ -64,7 +114,7 @@ ament_auto_add_executable(bag_to_text
 # be used as a composable node by other projects
 
 install(TARGETS
-  slicer
+  slicer rate
   DESTINATION lib
 )
 
@@ -73,6 +123,7 @@ install(TARGETS
 
 install(TARGETS
   slicer_node
+  rate_node
   bag_to_text
   DESTINATION lib/${PROJECT_NAME}/)
 
@@ -82,6 +133,8 @@ install(DIRECTORY
   DESTINATION share/${PROJECT_NAME}/
   FILES_MATCHING PATTERN "*.py")
 
+install(DIRECTORY include/
+  DESTINATION include)
 
 if(BUILD_TESTING)
   find_package(ament_cmake REQUIRED)
@@ -103,5 +156,7 @@ if(BUILD_TESTING)
   ament_pep257()
   ament_xmllint()
 endif()
+
+ament_export_dependencies(rosidl_default_runtime)
 
 ament_package()

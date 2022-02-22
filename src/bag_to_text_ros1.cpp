@@ -117,7 +117,7 @@ int main(int argc, char ** argv)
   std::string outFile;
   std::string topic("/metavision_driver/events");
   std::string messageType("dvs");
-  int aperture(0);
+  int aperture(-1);
   int x(-1), y(-1);
   while ((opt = getopt(argc, argv, "i:o:t:m:a:x:y:")) != -1) {
     switch (opt) {
